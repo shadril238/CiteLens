@@ -1,9 +1,18 @@
 import React from 'react'
 import { SEED_PAPER } from '../../data/mockData'
 import { Badge } from '../ui/Badge'
+import { useApp } from '../../context/AppContext'
+import { usePapers } from '../../hooks/usePapers'
 
 export function SeedCard() {
   const paper = SEED_PAPER
+  const { state } = useApp()
+  const papers = usePapers()
+  const hasResults = state.mode === 'results'
+
+  const subtitle = hasResults
+    ? `Found ${papers.length} citing papers`
+    : 'Analyzing citing papers…'
 
   return (
     <div
@@ -18,7 +27,7 @@ export function SeedCard() {
           Seed Paper
         </span>
         <span className="text-xs" style={{ color: 'var(--ink-4)' }}>
-          Analyzing citing papers…
+          {subtitle}
         </span>
       </div>
 
@@ -37,16 +46,16 @@ export function SeedCard() {
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             <span style={{ color: 'var(--ink-3)' }}>{paper.authors}</span>
-            <span style={{ color: 'var(--line-2)' }}>·</span>
+            <span style={{ color: 'var(--line-2)' }} aria-hidden="true">·</span>
             <span
               className="font-medium"
               style={{ color: 'var(--accent-ink)' }}
             >
               {paper.venue}
             </span>
-            <span style={{ color: 'var(--line-2)' }}>·</span>
+            <span style={{ color: 'var(--line-2)' }} aria-hidden="true">·</span>
             <span style={{ color: 'var(--ink-4)' }}>{paper.year}</span>
-            <span style={{ color: 'var(--line-2)' }}>·</span>
+            <span style={{ color: 'var(--line-2)' }} aria-hidden="true">·</span>
             <span style={{ color: 'var(--ink-3)' }}>
               <span className="font-mono font-medium">{paper.citations}</span> citations
             </span>
@@ -103,6 +112,7 @@ export function SeedCard() {
                 <span
                   className="w-1.5 h-1.5 rounded-full"
                   style={{ background: pill.color }}
+                  aria-hidden="true"
                 />
                 {pill.label}
               </div>

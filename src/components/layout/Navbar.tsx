@@ -20,7 +20,7 @@ export function Navbar() {
   return (
     <header
       className="sticky top-0 z-50 border-b border-[var(--line)] backdrop-blur-md"
-      style={{ background: 'oklch(from var(--bg-1) l c h / 0.92)' }}
+      style={{ background: 'color-mix(in oklab, var(--bg-1) 92%, transparent)' }}
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center h-14 gap-4">
         {/* Logo */}
@@ -70,9 +70,9 @@ export function Navbar() {
           {/* Theme toggle */}
           <button
             onClick={toggleTheme}
+            aria-label={tweaks.theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
             className="p-2 rounded-lg border border-[var(--line)] transition-colors hover:bg-[var(--bg-2)]"
             style={{ color: 'var(--ink-3)' }}
-            title={tweaks.theme === 'light' ? 'Switch to dark' : 'Switch to light'}
           >
             {tweaks.theme === 'light' ? <MoonIcon size={15} /> : <SunIcon size={15} />}
           </button>
@@ -80,6 +80,8 @@ export function Navbar() {
           {/* Tweaks button */}
           <button
             onClick={toggleTweaks}
+            aria-label="Open tweaks panel"
+            aria-expanded={state.tweaksPanelOpen}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
               state.tweaksPanelOpen
                 ? 'bg-[var(--accent-weak)] text-[var(--accent-ink)] border-[var(--accent-line)]'

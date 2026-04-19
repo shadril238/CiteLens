@@ -1,16 +1,18 @@
-import React from 'react'
+import React, { useId } from 'react'
 import type { Paper } from '../../types'
 import { Badge } from '../ui/Badge'
 import { Metric, RecipeRow } from '../ui/index'
 import { ChevronDownIcon, ChevronUpIcon, ExternalLinkIcon } from '../ui/Icons'
 import { useApp } from '../../context/AppContext'
 
+const REVIEW_BADGE_LABELS = new Set(['Survey', 'Review', 'Comprehensive'])
+
 function ScoreCircle({ score }: { score: number }) {
   const radius = 20
   const circ = 2 * Math.PI * radius
   const dash = (score / 100) * circ
   return (
-    <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
+    <div className="flex flex-col items-center gap-0.5 flex-shrink-0" aria-hidden="true">
       <svg width="52" height="52" viewBox="0 0 52 52">
         <circle
           cx="26"
@@ -60,10 +62,15 @@ export function PaperFocus({ paper, rank }: PaperFocusProps) {
   const { state, dispatch } = useApp()
   const isExpanded = state.expandedIds.has(paper.id)
   const tone = state.tweaks.reasoningTone
+  const breakdownId = useId()
 
   function toggleExpand() {
     dispatch({ type: 'TOGGLE_EXPANDED', payload: paper.id })
   }
+
+  // Avoid duplicating a "Review" badge if the badges array already contains
+  // a review-type label (Survey, Review, Comprehensive)
+  const showReviewBadge = paper.review && !paper.badges.some((b) => REVIEW_BADGE_LABELS.has(b))
 
   return (
     <article
@@ -77,6 +84,7 @@ export function PaperFocus({ paper, rank }: PaperFocusProps) {
           <span
             className="text-2xl font-mono font-semibold leading-none"
             style={{ color: 'var(--ink-5)' }}
+            aria-label={`Rank ${rank}`}
           >
             {rank}
           </span>
@@ -90,11 +98,11 @@ export function PaperFocus({ paper, rank }: PaperFocusProps) {
               <Badge
                 key={b}
                 label={b}
-                variant={b === 'Highly Influential' ? 'accent' : b === 'Survey' || b === 'Review' || b === 'Comprehensive' ? 'review' : 'default'}
+                variant={b === 'Highly Influential' ? 'accent' : REVIEW_BADGE_LABELS.has(b) ? 'review' : 'default'}
                 size="xs"
               />
             ))}
-            {paper.review && <Badge label="Review" variant="review" size="xs" />}
+            {showReviewBadge && <Badge label="Review" variant="review" size="xs" />}
           </div>
 
           {/* Title */}
@@ -111,13 +119,13 @@ export function PaperFocus({ paper, rank }: PaperFocusProps) {
           {/* Meta */}
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm">
             <span style={{ color: 'var(--ink-3)' }}>{paper.authors}</span>
-            <span style={{ color: 'var(--line-2)' }}>·</span>
+            <span style={{ color: 'var(--line-2)' }} aria-hidden="true">·</span>
             <span className="font-medium" style={{ color: 'var(--accent-ink)' }}>
               {paper.venue}
             </span>
-            <span style={{ color: 'var(--line-2)' }}>·</span>
+            <span style={{ color: 'var(--line-2)' }} aria-hidden="true">·</span>
             <span style={{ color: 'var(--ink-4)' }}>{paper.year}</span>
-            <span style={{ color: 'var(--line-2)' }}>·</span>
+            <span style={{ color: 'var(--line-2)' }} aria-hidden="true">·</span>
             <span style={{ color: 'var(--ink-3)' }}>
               <span className="font-mono font-medium">
                 {paper.citations.toLocaleString()}
@@ -140,7 +148,7 @@ export function PaperFocus({ paper, rank }: PaperFocusProps) {
 
           {/* Expandable: Why ranked here */}
           {isExpanded && (
-            <div className="flex flex-col gap-3 pt-1">
+            <div id={breakdownId} className="flex flex-col gap-3 pt-1">
               {/* Formula */}
               <div
                 className="p-3 rounded-xl border border-[var(--line)] text-xs overflow-x-auto"
@@ -189,6 +197,8 @@ export function PaperFocus({ paper, rank }: PaperFocusProps) {
           <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
             <button
               onClick={toggleExpand}
+              aria-expanded={isExpanded}
+              aria-controls={breakdownId}
               className="flex items-center gap-1.5 text-xs font-medium transition-colors hover:opacity-80"
               style={{ color: 'var(--accent-ink)' }}
             >

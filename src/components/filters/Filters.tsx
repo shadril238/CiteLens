@@ -2,6 +2,9 @@ import React from 'react'
 import { ResetIcon } from '../ui/Icons'
 import { useApp } from '../../context/AppContext'
 
+const YEAR_MIN = 2017
+const YEAR_MAX = 2025
+
 export function Filters() {
   const { state, dispatch } = useApp()
   const { filters } = state
@@ -10,8 +13,8 @@ export function Filters() {
     dispatch({ type: 'RESET_FILTERS' })
   }
 
-  const yearBarLeft = ((filters.yearFrom - 2017) / (2025 - 2017)) * 100
-  const yearBarWidth = ((filters.yearTo - filters.yearFrom) / (2025 - 2017)) * 100
+  const yearBarLeft = ((filters.yearFrom - YEAR_MIN) / (YEAR_MAX - YEAR_MIN)) * 100
+  const yearBarWidth = ((filters.yearTo - filters.yearFrom) / (YEAR_MAX - YEAR_MIN)) * 100
 
   return (
     <aside
@@ -44,8 +47,12 @@ export function Filters() {
           </span>
         </div>
 
-        {/* Visual year bar */}
-        <div className="relative h-2 rounded-full" style={{ background: 'var(--bg-3)' }}>
+        {/* Visual year bar — reflects slider state */}
+        <div
+          className="relative h-2 rounded-full"
+          style={{ background: 'var(--bg-3)' }}
+          aria-hidden="true"
+        >
           <div
             className="absolute top-0 h-full rounded-full"
             style={{
@@ -63,13 +70,14 @@ export function Filters() {
             <label className="text-[10px] mb-1 block" style={{ color: 'var(--ink-4)' }}>From</label>
             <input
               type="range"
-              min={2017}
+              min={YEAR_MIN}
               max={filters.yearTo}
               value={filters.yearFrom}
               onChange={(e) =>
                 dispatch({ type: 'SET_FILTER', payload: { yearFrom: Number(e.target.value) } })
               }
               className="w-full"
+              aria-label={`From year: ${filters.yearFrom}`}
             />
           </div>
           <div className="flex-1">
@@ -77,12 +85,13 @@ export function Filters() {
             <input
               type="range"
               min={filters.yearFrom}
-              max={2025}
+              max={YEAR_MAX}
               value={filters.yearTo}
               onChange={(e) =>
                 dispatch({ type: 'SET_FILTER', payload: { yearTo: Number(e.target.value) } })
               }
               className="w-full"
+              aria-label={`To year: ${filters.yearTo}`}
             />
           </div>
         </div>
@@ -95,23 +104,24 @@ export function Filters() {
             Relevance threshold
           </label>
           <span className="text-xs font-mono" style={{ color: 'var(--ink-3)' }}>
-            ≥{filters.relevanceThreshold}
+            {filters.relevanceThreshold === 0 ? 'Any' : `≥${filters.relevanceThreshold}`}
           </span>
         </div>
 
         {/* Gradient bar */}
         <div
           className="relative h-2 rounded-full"
+          aria-hidden="true"
           style={{
             background: 'linear-gradient(to right, var(--bg-3), var(--relevance))',
           }}
         >
           <div
-            className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm"
+            className="absolute top-1/2 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm"
             style={{
               left: `${filters.relevanceThreshold}%`,
               background: 'var(--relevance)',
-              transform: 'translateY(-50%)',
+              transform: 'translate(-50%, -50%)',
             }}
           />
         </div>
@@ -127,6 +137,7 @@ export function Filters() {
           }
           className="w-full"
           style={{ marginTop: '-0.5rem' }}
+          aria-label={`Minimum relevance score: ${filters.relevanceThreshold === 0 ? 'any' : filters.relevanceThreshold}`}
         />
       </div>
 
@@ -164,7 +175,7 @@ function Toggle({
     <label className="flex items-start gap-3 cursor-pointer group">
       <div className="flex-shrink-0 mt-0.5">
         <div
-          className="relative w-8 h-4.5 rounded-full transition-colors"
+          className="relative rounded-full transition-colors"
           style={{
             background: checked ? 'var(--accent)' : 'var(--bg-3)',
             width: '2rem',

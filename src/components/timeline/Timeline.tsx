@@ -4,6 +4,9 @@ import { TIMELINE_DATA } from '../../data/mockData'
 export function Timeline() {
   const maxCount = Math.max(...TIMELINE_DATA.map((d) => d.count))
   const total = TIMELINE_DATA.reduce((s, d) => s + d.count, 0)
+  const lastFull = TIMELINE_DATA[TIMELINE_DATA.length - 2]
+  const prevFull = TIMELINE_DATA[TIMELINE_DATA.length - 3]
+  const yoyGrowth = Math.round(((lastFull.count / prevFull.count) - 1) * 100)
 
   return (
     <div className="flex flex-col gap-6">
@@ -29,10 +32,10 @@ export function Timeline() {
               className="text-3xl font-mono font-semibold leading-none"
               style={{ color: 'var(--impact)' }}
             >
-              {TIMELINE_DATA[TIMELINE_DATA.length - 2].count.toLocaleString()}
+              {lastFull.count.toLocaleString()}
             </div>
             <div className="text-xs mt-1" style={{ color: 'var(--ink-4)' }}>
-              citations in 2023
+              citations in {lastFull.year}
             </div>
           </div>
           <div>
@@ -40,13 +43,10 @@ export function Timeline() {
               className="text-3xl font-mono font-semibold leading-none"
               style={{ color: 'var(--relevance)' }}
             >
-              +{Math.round(
-                ((TIMELINE_DATA[TIMELINE_DATA.length - 2].count /
-                  TIMELINE_DATA[TIMELINE_DATA.length - 3].count) - 1) * 100
-              )}%
+              +{yoyGrowth}%
             </div>
             <div className="text-xs mt-1" style={{ color: 'var(--ink-4)' }}>
-              YoY growth (22→23)
+              YoY growth ({String(prevFull.year).slice(2)}→{String(lastFull.year).slice(2)})
             </div>
           </div>
         </div>
@@ -57,6 +57,7 @@ export function Timeline() {
             viewBox="0 0 700 180"
             className="w-full overflow-visible"
             style={{ height: '180px' }}
+            aria-hidden="true"
           >
             {/* Horizontal axis */}
             <line
@@ -69,7 +70,7 @@ export function Timeline() {
             />
 
             {/* Grid lines */}
-            {[0, 25, 50, 75, 100].map((pct) => (
+            {[25, 50, 75, 100].map((pct) => (
               <line
                 key={pct}
                 x1="20"
@@ -123,46 +124,50 @@ export function Timeline() {
                   />
 
                   {/* Points */}
-                  {pts.map(({ x, y, d }, i) => (
-                    <g key={d.year}>
-                      {/* Point */}
-                      <circle
-                        cx={x}
-                        cy={y}
-                        r="5"
-                        fill="var(--bg-1)"
-                        stroke="var(--accent)"
-                        strokeWidth="2"
-                      />
+                  {pts.map(({ x, y, d }, i) => {
+                    // Alternate count label above/below the data point to reduce overlap
+                    const labelY = i % 2 === 0 ? y - 14 : y - 6
+                    return (
+                      <g key={d.year}>
+                        {/* Point */}
+                        <circle
+                          cx={x}
+                          cy={y}
+                          r="5"
+                          fill="var(--bg-1)"
+                          stroke="var(--accent)"
+                          strokeWidth="2"
+                        />
 
-                      {/* Year label */}
-                      <text
-                        x={x}
-                        y={90 + 14}
-                        textAnchor="middle"
-                        fontSize="10"
-                        fontFamily="JetBrains Mono, monospace"
-                        fill="var(--ink-4)"
-                      >
-                        {d.year}
-                      </text>
+                        {/* Year label */}
+                        <text
+                          x={x}
+                          y={90 + 14}
+                          textAnchor="middle"
+                          fontSize="10"
+                          fontFamily="JetBrains Mono, monospace"
+                          fill="var(--ink-4)"
+                        >
+                          {d.year}
+                        </text>
 
-                      {/* Count label (alternating above/below axis) */}
-                      <text
-                        x={x}
-                        y={i % 2 === 0 ? y - 10 : y - 10}
-                        textAnchor="middle"
-                        fontSize="9"
-                        fontFamily="JetBrains Mono, monospace"
-                        fontWeight="600"
-                        fill="var(--ink-3)"
-                      >
-                        {d.count >= 1000
-                          ? `${(d.count / 1000).toFixed(0)}K`
-                          : d.count}
-                      </text>
-                    </g>
-                  ))}
+                        {/* Count label */}
+                        <text
+                          x={x}
+                          y={labelY}
+                          textAnchor="middle"
+                          fontSize="9"
+                          fontFamily="JetBrains Mono, monospace"
+                          fontWeight="600"
+                          fill="var(--ink-3)"
+                        >
+                          {d.count >= 1000
+                            ? `${(d.count / 1000).toFixed(0)}K`
+                            : d.count}
+                        </text>
+                      </g>
+                    )
+                  })}
                 </>
               )
             })()}
@@ -193,6 +198,7 @@ export function Timeline() {
               <div
                 className="flex-1 h-1.5 rounded-full overflow-hidden"
                 style={{ background: 'var(--bg-3)' }}
+                aria-hidden="true"
               >
                 <div
                   className="h-full rounded-full"

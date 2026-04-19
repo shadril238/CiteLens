@@ -38,7 +38,7 @@ function PaperSplitItem({ paper, rank, isSelected, onClick }: PaperSplitItemProp
             {paper.title}
           </h3>
           <div className="flex flex-wrap items-center gap-1.5 text-xs" style={{ color: 'var(--ink-4)' }}>
-            <span className="font-medium" style={{ color: isSelected ? 'var(--accent-ink)' : 'var(--accent-ink)', opacity: 0.8 }}>
+            <span className="font-medium" style={{ color: 'var(--accent-ink)', opacity: 0.8 }}>
               {paper.venue}
             </span>
             <span>·</span>

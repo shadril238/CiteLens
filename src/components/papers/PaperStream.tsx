@@ -13,15 +13,27 @@ function PaperStreamRow({ paper, rank }: PaperStreamRowProps) {
   const { state, dispatch } = useApp()
   const isSelected = state.selectedPaperId === paper.id
 
+  function handleSelect() {
+    dispatch({
+      type: 'SELECT_PAPER',
+      payload: isSelected ? null : paper.id,
+    })
+  }
+
   return (
     <tr
-      onClick={() =>
-        dispatch({
-          type: 'SELECT_PAPER',
-          payload: isSelected ? null : paper.id,
-        })
-      }
-      className={`cursor-pointer transition-colors ${
+      onClick={handleSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          handleSelect()
+        }
+      }}
+      tabIndex={0}
+      role="button"
+      aria-pressed={isSelected}
+      aria-label={`${paper.title}, score ${paper.final}`}
+      className={`cursor-pointer transition-colors focus-visible:outline-none focus-visible:bg-[var(--accent-weak)] ${
         isSelected ? 'bg-[var(--accent-weak)]' : 'hover:bg-[var(--bg-2)]'
       }`}
     >
@@ -85,6 +97,7 @@ function PaperStreamRow({ paper, rank }: PaperStreamRowProps) {
         <a
           href="#"
           onClick={(e) => e.stopPropagation()}
+          aria-label={`Open ${paper.title}`}
           className="opacity-40 hover:opacity-100 transition-opacity"
           style={{ color: 'var(--ink-3)' }}
         >

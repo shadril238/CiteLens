@@ -2,10 +2,7 @@ import React from 'react'
 
 function SkeletonBlock({ className = '' }: { className?: string }) {
   return (
-    <div
-      className={`shimmer rounded-lg ${className}`}
-      style={{ background: undefined }}
-    />
+    <div className={`shimmer rounded-lg ${className}`} />
   )
 }
 
@@ -43,7 +40,7 @@ function SkeletonCard() {
 
 export function SkeletonResults() {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" aria-label="Loading results…" aria-busy="true">
       {Array.from({ length: 4 }).map((_, i) => (
         <SkeletonCard key={i} />
       ))}
@@ -56,6 +53,7 @@ export function SkeletonSeedCard() {
     <div
       className="rounded-2xl p-6 border border-[var(--line)]"
       style={{ background: 'var(--bg-1)' }}
+      aria-hidden="true"
     >
       <div className="flex gap-6">
         <div className="flex-1 flex flex-col gap-3">
