@@ -176,9 +176,11 @@ async def analyze_paper(req: AnalyzePaperRequest) -> dict:
     sources_used: list[str] = list(seed.sources)
     raw_citing: list = []
 
+    fetch_limit = min(req.limit * 3, 100)
+
     if seed_ss_id:
         try:
-            raw_citing = await ss.get_citing_papers(seed_ss_id, limit=min(req.limit * 5, 300))
+            raw_citing = await ss.get_citing_papers(seed_ss_id, limit=fetch_limit)
             if "Semantic Scholar" not in sources_used:
                 sources_used.append("Semantic Scholar")
         except UpstreamAPIError as exc:
@@ -187,7 +189,7 @@ async def analyze_paper(req: AnalyzePaperRequest) -> dict:
     if not raw_citing and seed_oa_id:
         logger.info("Falling back to OpenAlex for citing papers (no SS data)")
         try:
-            raw_citing = await oa.get_citing_papers(seed_oa_id, limit=min(req.limit * 5, 300))
+            raw_citing = await oa.get_citing_papers(seed_oa_id, limit=fetch_limit)
             if "OpenAlex" not in sources_used:
                 sources_used.append("OpenAlex")
         except Exception as exc:

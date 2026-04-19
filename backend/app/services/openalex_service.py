@@ -89,7 +89,13 @@ async def enrich_batch(papers: list[RawPaper]) -> list[RawPaper]:
     Errors are swallowed — this is always best-effort.
     """
     import asyncio
-    tasks = [enrich_paper_by_doi(p) for p in papers]
+    semaphore = asyncio.Semaphore(10)  # max 10 concurrent OA requests
+
+    async def _enrich(p: RawPaper) -> RawPaper:
+        async with semaphore:
+            return await enrich_paper_by_doi(p)
+
+    tasks = [_enrich(p) for p in papers]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     enriched: list[RawPaper] = []
     for orig, result in zip(papers, results):

@@ -101,16 +101,15 @@ def _parse_paper(data: dict, is_highly_influential: bool = False) -> RawPaper:
 
 
 async def _get_with_retry(client: httpx.AsyncClient, url: str, params: dict, retries: int = 3) -> httpx.Response:
-    """GET with exponential backoff on 429 rate-limit responses."""
-    delay = 2.0
+    """GET with backoff on 429 rate-limit responses."""
     for attempt in range(retries):
         response = await client.get(url, headers=_headers(), params=params)
         if response.status_code != 429:
             return response
-        wait = delay * (2 ** attempt)
+        wait = 1.0 * (2 ** attempt)  # 1s, 2s, 4s
         logger.warning("SS rate-limited — retrying in %.1fs (attempt %d/%d)", wait, attempt + 1, retries)
         await asyncio.sleep(wait)
-    return response  # return last response after exhausting retries
+    return response
 
 
 async def get_paper(value: str, input_type: str) -> RawPaper:

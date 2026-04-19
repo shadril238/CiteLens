@@ -41,6 +41,15 @@ function SkeletonCard() {
 export function SkeletonResults() {
   return (
     <div className="flex flex-col gap-4" aria-label="Loading results…" aria-busy="true">
+      <div
+        className="rounded-2xl border border-[var(--accent-line)] px-5 py-3 flex items-center gap-3"
+        style={{ background: 'var(--accent-weak)' }}
+      >
+        <span className="w-3.5 h-3.5 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin flex-shrink-0" />
+        <span className="text-sm" style={{ color: 'var(--accent-ink)' }}>
+          Fetching and ranking citing papers — this can take 10–20 seconds…
+        </span>
+      </div>
       {Array.from({ length: 4 }).map((_, i) => (
         <SkeletonCard key={i} />
       ))}
