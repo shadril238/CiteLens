@@ -10,6 +10,7 @@ Returns a single RawPaper or raises PaperNotFoundError.
 """
 
 import logging
+import re
 from app.models.api import ParsedInput
 from app.models.paper import RawPaper
 from app.services import semantic_scholar_service as ss
@@ -37,9 +38,10 @@ async def resolve(parsed: ParsedInput) -> RawPaper:
 
     elif parsed.input_type == "title":
         try:
-            results = await ss.search_by_title(parsed.value, limit=3)
-            if results:
-                paper = results[0]
+            results = await ss.search_by_title(parsed.value, limit=5)
+            match = _best_title_match(parsed.value, results)
+            if match:
+                paper = match
                 logger.info("Resolved title '%s' via SS search", parsed.value)
         except UpstreamAPIError as exc:
             logger.warning("SS title search failed: %s", exc)
@@ -56,11 +58,14 @@ async def resolve(parsed: ParsedInput) -> RawPaper:
     # --- OpenAlex title search as last resort --------------------------------
     if paper is None and parsed.input_type == "title":
         try:
-            oa_results = await oa.search_by_title(parsed.value, limit=3)
+            oa_results = await oa.search_by_title(parsed.value, limit=5)
             if oa_results:
-                hit = oa_results[0]
-                paper = _oa_result_to_raw_paper(hit)
-                logger.info("Resolved title '%s' via OpenAlex", parsed.value)
+                # Pick the OA result whose title best matches the query
+                oa_papers = [_oa_result_to_raw_paper(h) for h in oa_results]
+                match = _best_title_match(parsed.value, oa_papers)
+                if match:
+                    paper = match
+                    logger.info("Resolved title '%s' via OpenAlex", parsed.value)
         except Exception as exc:
             logger.warning("OA title search failed: %s", exc)
 
@@ -77,6 +82,39 @@ async def resolve(parsed: ParsedInput) -> RawPaper:
         pass
 
     return paper
+
+
+def _normalise(text: str) -> set[str]:
+    """Lowercase, strip punctuation, return set of words."""
+    return set(re.sub(r"[^\w\s]", "", text.lower()).split())
+
+
+def _title_similarity(query: str, candidate: str) -> float:
+    """Jaccard similarity between query and candidate title word sets."""
+    a = _normalise(query)
+    b = _normalise(candidate)
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
+def _best_title_match(query: str, papers: list[RawPaper], threshold: float = 0.3) -> RawPaper | None:
+    """
+    Return the paper with the highest title similarity to the query,
+    only if it meets the minimum threshold. Returns None if no good match.
+    """
+    best: RawPaper | None = None
+    best_score = 0.0
+    for p in papers:
+        score = _title_similarity(query, p.title)
+        if score > best_score:
+            best_score = score
+            best = p
+    if best_score >= threshold:
+        logger.debug("Best title match: %.2f — '%s'", best_score, best.title if best else "")
+        return best
+    logger.debug("No title match above threshold %.2f (best was %.2f)", threshold, best_score)
+    return None
 
 
 def _oa_result_to_raw_paper(hit: dict) -> RawPaper:
