@@ -1,0 +1,180 @@
+import React from 'react'
+import { Navbar } from './components/layout/Navbar'
+import { Hero } from './components/hero/Hero'
+import { ResultsShell } from './components/results/ResultsShell'
+import { TweaksPanel, getAccentVars } from './components/tweaks/TweaksPanel'
+import { useApp } from './context/AppContext'
+
+export function App() {
+  const { state } = useApp()
+  const { tweaks, mode } = state
+
+  const accentVars = getAccentVars(tweaks.accent, tweaks.theme)
+  const densityClass = tweaks.density === 'compact' ? 'density-compact' : 'density-cozy'
+
+  return (
+    <div
+      data-theme={tweaks.theme}
+      className={`min-h-screen ${densityClass}`}
+      style={{
+        background: 'var(--bg)',
+        color: 'var(--ink)',
+        ...accentVars,
+      }}
+    >
+      <Navbar />
+
+      <main>
+        <Hero />
+
+        {(mode === 'loading' || mode === 'results') && (
+          <ResultsShell />
+        )}
+
+        {mode === 'error' && (
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16 text-center">
+            <div
+              className="text-4xl mb-4"
+              style={{ fontFamily: 'Instrument Serif, Georgia, serif', color: 'var(--ink)' }}
+            >
+              Something went wrong
+            </div>
+            <p className="text-base mb-6" style={{ color: 'var(--ink-3)' }}>
+              We couldn't retrieve citing papers for this input. Please check the
+              arXiv ID, DOI, or title and try again.
+            </p>
+            <button
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold"
+              style={{ background: 'var(--accent)', color: 'white' }}
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {mode === 'idle' && (
+          <section className="max-w-5xl mx-auto px-4 sm:px-6 py-16">
+            {/* Feature grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[
+                {
+                  title: 'Impact',
+                  desc: 'Citation count, h-index influence, and downstream citation velocity.',
+                  color: 'var(--impact)',
+                  bg: 'var(--impact-weak)',
+                },
+                {
+                  title: 'Network',
+                  desc: 'Co-citation clusters, bibliographic coupling, and centrality scores.',
+                  color: 'var(--network)',
+                  bg: 'var(--network-weak)',
+                },
+                {
+                  title: 'Relevance',
+                  desc: 'Semantic similarity using embedding models over titles and abstracts.',
+                  color: 'var(--relevance)',
+                  bg: 'var(--relevance-weak)',
+                },
+                {
+                  title: 'Context',
+                  desc: 'How the paper is cited — foundational, applied, contested, or reviewed.',
+                  color: 'var(--context)',
+                  bg: 'var(--context-weak)',
+                },
+              ].map((f) => (
+                <div
+                  key={f.title}
+                  className="rounded-2xl p-5 border border-[var(--line)] flex flex-col gap-3"
+                  style={{ background: 'var(--bg-1)' }}
+                >
+                  <div
+                    className="w-9 h-9 rounded-xl flex items-center justify-center"
+                    style={{ background: f.bg }}
+                  >
+                    <span
+                      className="w-3 h-3 rounded-full"
+                      style={{ background: f.color }}
+                    />
+                  </div>
+                  <div>
+                    <div
+                      className="text-base font-semibold mb-1"
+                      style={{ color: f.color }}
+                    >
+                      {f.title}
+                    </div>
+                    <div className="text-sm leading-relaxed" style={{ color: 'var(--ink-3)' }}>
+                      {f.desc}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Sources row */}
+            <div
+              className="mt-8 rounded-2xl border border-[var(--line)] p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4"
+              style={{ background: 'var(--bg-1)' }}
+            >
+              <div className="flex-shrink-0">
+                <div
+                  className="text-xs font-semibold uppercase tracking-wider mb-2"
+                  style={{ color: 'var(--ink-4)' }}
+                >
+                  Data sources
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {['OpenAlex', 'Semantic Scholar', 'Crossref'].map((src) => (
+                    <span
+                      key={src}
+                      className="px-2.5 py-1 rounded-full border text-xs font-medium"
+                      style={{
+                        borderColor: 'var(--line)',
+                        color: 'var(--ink-3)',
+                        background: 'var(--bg-2)',
+                      }}
+                    >
+                      {src}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="flex-1 hidden sm:block h-px" style={{ background: 'var(--line)' }} />
+              <p className="text-sm leading-relaxed max-w-sm" style={{ color: 'var(--ink-4)' }}>
+                CiteLens cross-references three open scholarly APIs to build the most
+                complete picture of how a paper has been cited and by whom.
+              </p>
+            </div>
+          </section>
+        )}
+      </main>
+
+      {/* Footer */}
+      <footer
+        className="border-t border-[var(--line)] mt-16"
+        style={{ background: 'var(--bg-2)' }}
+      >
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--ink-4)' }}>
+            <span
+              className="font-semibold"
+              style={{ fontFamily: 'Instrument Serif, Georgia, serif', color: 'var(--ink-3)' }}
+            >
+              CiteLens
+            </span>
+            <span>·</span>
+            <span>Research citation discovery</span>
+          </div>
+          <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--ink-5)' }}>
+            <a href="#" className="hover:text-[var(--ink-3)] transition-colors">Methodology</a>
+            <a href="#" className="hover:text-[var(--ink-3)] transition-colors">API</a>
+            <a href="#" className="hover:text-[var(--ink-3)] transition-colors">Privacy</a>
+          </div>
+        </div>
+      </footer>
+
+      {/* Tweaks panel */}
+      <TweaksPanel />
+    </div>
+  )
+}
