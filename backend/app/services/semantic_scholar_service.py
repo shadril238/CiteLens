@@ -5,6 +5,7 @@ API docs: https://api.semanticscholar.org/api-docs/graph
 Rate limits: 1 req/s unauthenticated, 10 req/s with API key.
 """
 
+import asyncio
 import logging
 from typing import Optional
 import httpx
@@ -99,14 +100,27 @@ def _parse_paper(data: dict, is_highly_influential: bool = False) -> RawPaper:
     )
 
 
+async def _get_with_retry(client: httpx.AsyncClient, url: str, params: dict, retries: int = 3) -> httpx.Response:
+    """GET with exponential backoff on 429 rate-limit responses."""
+    delay = 2.0
+    for attempt in range(retries):
+        response = await client.get(url, headers=_headers(), params=params)
+        if response.status_code != 429:
+            return response
+        wait = delay * (2 ** attempt)
+        logger.warning("SS rate-limited — retrying in %.1fs (attempt %d/%d)", wait, attempt + 1, retries)
+        await asyncio.sleep(wait)
+    return response  # return last response after exhausting retries
+
+
 async def get_paper(value: str, input_type: str) -> RawPaper:
     """Resolve and return a single paper by any supported ID type."""
     paper_id = _paper_id_param(value, input_type)
     url = f"{_BASE}/paper/{paper_id}"
     params = {"fields": _PAPER_FIELDS}
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await client.get(url, headers=_headers(), params=params)
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await _get_with_retry(client, url, params)
 
     _raise_for_status(response, "Semantic Scholar")
     return _parse_paper(response.json())
@@ -117,8 +131,8 @@ async def search_by_title(title: str, limit: int = 5) -> list[RawPaper]:
     url = f"{_BASE}/paper/search"
     params = {"query": title, "limit": limit, "fields": _PAPER_FIELDS}
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await client.get(url, headers=_headers(), params=params)
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await _get_with_retry(client, url, params)
 
     if response.status_code == 404 or not response.is_success:
         logger.warning("SS title search failed: %s", response.status_code)
