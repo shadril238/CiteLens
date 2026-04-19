@@ -32,7 +32,7 @@ export function Navbar() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center h-14 gap-4">
         {/* Logo */}
         <button
-          onClick={() => dispatch({ type: 'SET_MODE', payload: 'idle' })}
+          onClick={() => window.location.reload()}
           className="flex items-center gap-2.5 flex-shrink-0 no-underline bg-transparent border-0 cursor-pointer p-0"
         >
           <LogoIcon size={28} />
