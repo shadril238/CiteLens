@@ -1,10 +1,16 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { LogoIcon, SearchIcon, SlidersIcon, SunIcon, MoonIcon } from '../ui/Icons'
 import { useApp } from '../../context/AppContext'
+import { MethodologyModal } from '../modals/MethodologyModal'
+import { DocsModal } from '../modals/DocsModal'
+import { ChangelogModal } from '../modals/ChangelogModal'
+
+type ModalKey = 'methodology' | 'docs' | 'changelog' | null
 
 export function Navbar() {
   const { state, dispatch } = useApp()
   const { tweaks } = state
+  const [modal, setModal] = useState<ModalKey>(null)
 
   function toggleTheme() {
     dispatch({
@@ -18,6 +24,7 @@ export function Navbar() {
   }
 
   return (
+    <>
     <header
       className="sticky top-0 z-50 border-b border-[var(--line)] backdrop-blur-md"
       style={{ background: 'color-mix(in oklab, var(--bg-1) 92%, transparent)' }}
@@ -36,15 +43,19 @@ export function Navbar() {
 
         {/* Nav links */}
         <nav className="hidden sm:flex items-center gap-1 ml-4">
-          {['Methodology', 'Docs', 'Changelog'].map((link) => (
-            <a
-              key={link}
-              href="#"
+          {([
+            { label: 'Methodology', key: 'methodology' },
+            { label: 'Docs', key: 'docs' },
+            { label: 'Changelog', key: 'changelog' },
+          ] as { label: string; key: ModalKey }[]).map(({ label, key }) => (
+            <button
+              key={key}
+              onClick={() => setModal(key)}
               className="px-3 py-1.5 text-sm rounded-lg transition-colors hover:bg-[var(--bg-2)]"
               style={{ color: 'var(--ink-3)' }}
             >
-              {link}
-            </a>
+              {label}
+            </button>
           ))}
         </nav>
 
@@ -94,5 +105,10 @@ export function Navbar() {
         </div>
       </div>
     </header>
+
+    <MethodologyModal open={modal === 'methodology'} onClose={() => setModal(null)} />
+    <DocsModal open={modal === 'docs'} onClose={() => setModal(null)} />
+    <ChangelogModal open={modal === 'changelog'} onClose={() => setModal(null)} />
+    </>
   )
 }
