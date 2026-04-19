@@ -44,8 +44,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "Accept"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    # Allow all headers — we don't use credentials so this is safe.
+    # Keeps the list from becoming a maintenance burden as the frontend evolves.
+    allow_headers=["*"],
 )
 
 # ---------------------------------------------------------------------------
@@ -66,7 +68,7 @@ app.include_router(papers.router)
 
 
 # ---------------------------------------------------------------------------
-# Root redirect to docs
+# Root
 # ---------------------------------------------------------------------------
 @app.get("/", include_in_schema=False)
 async def root():

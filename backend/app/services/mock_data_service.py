@@ -299,7 +299,7 @@ def get_mock_analyze_response() -> AnalyzePaperResponse:
     )
 
     results = []
-    for item in _CITING_PAPERS:
+    for item in sorted(_CITING_PAPERS, key=lambda x: float(x["final"]), reverse=True):
         p: RawPaper = item["paper"]
         impact = float(item["impact"])
         network = float(item["network"])

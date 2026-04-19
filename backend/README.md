@@ -42,9 +42,12 @@ This is the default for the test suite.
 
 ```bash
 cd backend
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 pytest tests/ -v
 ```
+
+Tests run in mock mode by default (no live API calls required). This is configured
+automatically by `tests/conftest.py` — do not set `USE_MOCK_DATA` manually when running tests.
 
 ## Environment variables
 
@@ -56,6 +59,7 @@ pytest tests/ -v
 | `PORT` | `8000` | Bind port |
 | `ALLOWED_ORIGINS` | `http://localhost:5173,...` | Comma-separated CORS origins |
 | `USE_MOCK_DATA` | `false` | Return mock data without API calls |
+| `FALLBACK_TO_MOCK_ON_ERROR` | `true` | Fall back to mock when upstream APIs fail (set `false` in production for hard errors) |
 | `SEMANTIC_SCHOLAR_API_KEY` | — | Optional — raises rate limit from 1 to 10 req/s |
 | `OPENALEX_EMAIL` | — | Recommended — enables polite pool (faster) |
 | `ARXIV_USER_AGENT` | `CiteLens/1.0` | Sent in User-Agent header to arXiv |

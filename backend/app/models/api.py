@@ -111,7 +111,7 @@ class ResolvePaperResponse(_CamelModel):
 class CitationsResponse(_CamelModel):
     seed_paper_id: str
     total: int
-    papers: list[RankedPaper]
+    papers: list[PaperMetadata]
     mock_mode: bool = False
 
 
@@ -123,10 +123,27 @@ class HealthResponse(_CamelModel):
 
 
 # ---------------------------------------------------------------------------
-# Parsed input (internal use, but also returned by /resolve-paper)
+# Flat paper metadata (used by /citations — no scoring required)
 # ---------------------------------------------------------------------------
 
-class ParsedInput(_CamelModel):
+class PaperMetadata(_CamelModel):
+    id: str
+    title: str
+    authors: list[str]
+    abstract: Optional[str] = None
+    year: Optional[int] = None
+    venue: Optional[str] = None
+    doi: Optional[str] = None
+    url: Optional[str] = None
+    citation_count: int = 0
+    sources: list[str] = []
+
+
+# ---------------------------------------------------------------------------
+# Parsed input (internal — never sent to client)
+# ---------------------------------------------------------------------------
+
+class ParsedInput(BaseModel):
     raw: str
     input_type: Literal["arxiv_id", "doi", "semantic_scholar_url", "arxiv_url", "doi_url", "title"]
     value: str  # cleaned/extracted value (e.g. "1706.03762" for arXiv)

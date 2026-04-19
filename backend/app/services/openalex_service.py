@@ -84,17 +84,20 @@ async def enrich_paper_by_doi(paper: RawPaper) -> RawPaper:
 
 async def enrich_batch(papers: list[RawPaper]) -> list[RawPaper]:
     """
-    Enrich a list of papers with OpenAlex metrics.
+    Enrich a list of papers with OpenAlex metrics concurrently.
     Papers without a DOI are returned unchanged.
     Errors are swallowed — this is always best-effort.
     """
-    enriched = []
-    for paper in papers:
-        try:
-            enriched.append(await enrich_paper_by_doi(paper))
-        except Exception as exc:
-            logger.warning("OA enrichment skipped for %s: %s", paper.id, exc)
-            enriched.append(paper)
+    import asyncio
+    tasks = [enrich_paper_by_doi(p) for p in papers]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    enriched: list[RawPaper] = []
+    for orig, result in zip(papers, results):
+        if isinstance(result, Exception):
+            logger.warning("OA enrichment skipped for %s: %s", orig.id, result)
+            enriched.append(orig)
+        else:
+            enriched.append(result)
     return enriched
 
 

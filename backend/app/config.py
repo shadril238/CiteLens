@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     # Set to true to bypass all live API calls and return mock data
     USE_MOCK_DATA: bool = False
 
+    # When a live upstream API fails during a real query, fall back to mock data
+    # rather than returning a 502. Set to false in production if you want hard errors.
+    FALLBACK_TO_MOCK_ON_ERROR: bool = True
+
     # External API credentials
     SEMANTIC_SCHOLAR_API_KEY: Optional[str] = None
     OPENALEX_EMAIL: Optional[str] = None

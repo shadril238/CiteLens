@@ -1,6 +1,6 @@
 import pytest
 from app.models.paper import RawPaper
-from app.services.ranking_service import rank_papers
+from app.services.ranking_service import rank_papers, ScoredPaper
 from app.utils.normalization import minmax, renormalize_weights, log1p_norm
 
 
@@ -78,8 +78,6 @@ def test_rank_highly_influential_boosted():
     low_citations = _make_paper("low", citations=10, influential=True)
     high_citations = _make_paper("high", citations=10000, influential=False)
     scored = rank_papers(seed, [low_citations, high_citations])
-    # Highly influential paper should still score well despite fewer citations
-    # (not necessarily rank 1, but intent score should be 1.0)
     intent_scores = {s.paper.id: s.citation_intent_score for s in scored}
     assert intent_scores["low"] == 1.0
     assert intent_scores["high"] == 0.0
@@ -117,3 +115,35 @@ def test_why_ranked_not_empty():
     scored = rank_papers(seed, papers)
     assert scored[0].why_ranked
     assert len(scored[0].why_ranked) > 10
+
+
+def test_why_ranked_mentions_influential():
+    seed = _seed()
+    paper = _make_paper("p1", citations=100, influential=True)
+    scored = rank_papers(seed, [paper])
+    assert "influential" in scored[0].why_ranked.lower()
+
+
+def test_scored_paper_has_all_fields():
+    seed = _seed()
+    paper = _make_paper("p1", citations=1000)
+    scored = rank_papers(seed, [paper])
+    s = scored[0]
+    assert isinstance(s, ScoredPaper)
+    assert hasattr(s, "impact_score")
+    assert hasattr(s, "network_score")
+    assert hasattr(s, "relevance_score")
+    assert hasattr(s, "citation_intent_score")
+    assert hasattr(s, "final_score")
+    assert hasattr(s, "why_ranked")
+
+
+def test_oa_enriched_papers_use_cnp():
+    """Papers with OA data should use citation_normalized_percentile for impact."""
+    seed = _seed()
+    rich = _make_paper("rich", citations=100)
+    rich = rich.model_copy(update={"citation_normalized_percentile": 0.99, "fwci": 10.0})
+    poor = _make_paper("poor", citations=100)
+    scored = rank_papers(seed, [rich, poor])
+    scores = {s.paper.id: s.impact_score for s in scored}
+    assert scores["rich"] > scores["poor"]

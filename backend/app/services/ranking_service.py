@@ -135,7 +135,7 @@ def rank_papers(seed: RawPaper, candidates: list[RawPaper]) -> list[ScoredPaper]
     network_vec = _network_scores(candidates)
     relevance_vec = relevance_score_batch(seed, candidates)
     # Re-normalise relevance since raw similarity values are low
-    relevance_vec = minmax(relevance_vec) if len(set(relevance_vec)) > 1 else relevance_vec
+    relevance_vec = minmax(relevance_vec)
     intent_vec = [1.0 if p.is_highly_influential else 0.0 for p in candidates]
 
     # Determine which signals are actually available

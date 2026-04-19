@@ -16,7 +16,7 @@ from app.models.api import (
     ResolvePaperRequest, ResolvePaperResponse,
     CitationsRequest, CitationsResponse,
     RankedCitationsRequest,
-    ParsedInput,
+    PaperMetadata,
 )
 from app.services import input_parser as parser
 from app.services import paper_resolver
@@ -69,22 +69,37 @@ async def resolve_paper(req: ResolvePaperRequest) -> dict:
 async def get_citations(req: CitationsRequest) -> dict:
     if settings.USE_MOCK_DATA:
         mock_resp = mock.get_mock_analyze_response()
+        mock_papers = [
+            PaperMetadata(
+                id=rp.id, title=rp.title, authors=rp.authors,
+                abstract=rp.abstract, year=rp.year, venue=rp.venue,
+                doi=rp.doi, url=rp.url, citation_count=rp.citation_count,
+            )
+            for rp in mock_resp.results
+        ]
         return CitationsResponse(
             seed_paper_id=mock_resp.seed_paper.id,
             total=mock_resp.summary.total_citing_papers,
-            papers=mock_resp.results,
+            papers=mock_papers,
             mock_mode=True,
         ).model_dump(by_alias=True)
 
     try:
-        papers = await ss.get_citing_papers(req.paper_id, limit=req.limit)
-        papers = dedup.deduplicate(papers)
-        # No scoring for this endpoint — return as RankedPaper with zero scores
-        dummy_seed_paper = papers[0] if papers else None
+        raw_papers = await ss.get_citing_papers(req.paper_id, limit=req.limit)
+        raw_papers = dedup.deduplicate(raw_papers)
+        papers_out = [
+            PaperMetadata(
+                id=p.id, title=p.title, authors=p.authors,
+                abstract=p.abstract, year=p.year, venue=p.venue,
+                doi=p.doi, url=p.url, citation_count=p.citation_count,
+                sources=p.sources,
+            )
+            for p in raw_papers
+        ]
         return CitationsResponse(
             seed_paper_id=req.paper_id,
-            total=len(papers),
-            papers=[],  # callers who want scores should use /ranked-citations
+            total=len(raw_papers),
+            papers=papers_out,
             mock_mode=False,
         ).model_dump(by_alias=True)
     except CiteLensError as exc:
@@ -141,7 +156,8 @@ async def analyze_paper(req: AnalyzePaperRequest) -> dict:
         raise HTTPException(status_code=404, detail=str(exc))
     except UpstreamAPIError as exc:
         logger.warning("Upstream failure resolving paper: %s", exc)
-        # Graceful fallback to mock so the frontend always gets usable data
+        if not settings.FALLBACK_TO_MOCK_ON_ERROR:
+            raise HTTPException(status_code=502, detail="Upstream API unavailable. Try again later.")
         logger.info("Falling back to mock data due to upstream failure.")
         resp = mock.get_mock_analyze_response()
         return resp.model_dump(by_alias=True)
