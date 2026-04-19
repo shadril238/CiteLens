@@ -193,9 +193,9 @@ export function App() {
             <span>Research citation discovery</span>
           </div>
           <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--ink-5)' }}>
-            <a href="#" className="hover:text-[var(--ink-3)] transition-colors">Methodology</a>
-            <a href="#" className="hover:text-[var(--ink-3)] transition-colors">API</a>
-            <a href="#" className="hover:text-[var(--ink-3)] transition-colors">Privacy</a>
+            <span>Methodology</span>
+            <span>API</span>
+            <span>Privacy</span>
           </div>
         </div>
       </footer>

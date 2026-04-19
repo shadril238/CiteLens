@@ -31,7 +31,10 @@ export function Navbar() {
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center h-14 gap-4">
         {/* Logo */}
-        <a href="#" className="flex items-center gap-2.5 flex-shrink-0 no-underline">
+        <button
+          onClick={() => dispatch({ type: 'SET_MODE', payload: 'idle' })}
+          className="flex items-center gap-2.5 flex-shrink-0 no-underline bg-transparent border-0 cursor-pointer p-0"
+        >
           <LogoIcon size={28} />
           <span
             className="text-base font-semibold tracking-tight"
@@ -39,7 +42,7 @@ export function Navbar() {
           >
             CiteLens
           </span>
-        </a>
+        </button>
 
         {/* Nav links */}
         <nav className="hidden sm:flex items-center gap-1 ml-4">
