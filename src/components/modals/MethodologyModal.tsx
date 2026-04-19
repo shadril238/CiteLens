@@ -70,7 +70,7 @@ export function MethodologyModal({ open, onClose }: Props) {
             <ScoreCard
               label="Impact"
               color="var(--impact)"
-              weight="35%"
+              weight="45%"
               description="How widely cited is this paper?"
               detail="Uses citation count, OpenAlex FWCI (field-weighted citation impact), and citation percentile within the paper's field."
             />
@@ -84,14 +84,14 @@ export function MethodologyModal({ open, onClose }: Props) {
             <ScoreCard
               label="Relevance"
               color="var(--relevance)"
-              weight="25%"
+              weight="20%"
               description="How similar is this paper to the seed?"
               detail="Token-overlap similarity between the seed paper's title and abstract and the candidate's title and abstract."
             />
             <ScoreCard
               label="Context"
               color="var(--context)"
-              weight="15%"
+              weight="10%"
               description="How influential is this citation?"
               detail="Semantic Scholar's influential citation signal — flags papers where the citing work builds directly on the cited methodology."
             />

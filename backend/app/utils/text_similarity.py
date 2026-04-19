@@ -23,8 +23,10 @@ _STOPWORDS = {
 }
 
 
-def tokenize(text: str) -> list[str]:
+def tokenize(text: str | None) -> list[str]:
     """Lowercase, strip punctuation, remove stopwords, return tokens."""
+    if not text:
+        return []
     text = text.lower()
     tokens = re.findall(r"\b[a-z]{3,}\b", text)
     return [t for t in tokens if t not in _STOPWORDS]

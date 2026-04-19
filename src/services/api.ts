@@ -130,7 +130,7 @@ export interface AnalyzeResult {
  * Analyze a paper and return ranked citing papers.
  * Falls back to bundled mock data if the backend is unavailable or unconfigured.
  */
-export async function analyzePaper(query: string, limit = 20): Promise<AnalyzeResult> {
+export async function analyzePaper(query: string, limit = 20, signal?: AbortSignal): Promise<AnalyzeResult> {
   if (!API_BASE) {
     return {
       papers: PAPERS,
@@ -147,8 +147,11 @@ export async function analyzePaper(query: string, limit = 20): Promise<AnalyzeRe
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query, limit }),
+      signal,
     })
-  } catch {
+  } catch (err) {
+    // Cancelled by AbortController — let it propagate so caller can ignore it
+    if (err instanceof DOMException && err.name === 'AbortError') throw err
     // Network error — backend unreachable, fall back to demo data
     return {
       papers: PAPERS,

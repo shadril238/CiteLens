@@ -89,7 +89,7 @@ export function DocsModal({ open, onClose }: Props) {
               { label: 'Network', color: 'var(--network)', desc: 'Centrality in the local citation graph. High network score = frequently co-cited with other important papers.' },
               { label: 'Relevance', color: 'var(--relevance)', desc: 'Textual similarity to your seed paper. High relevance = the paper closely relates to the same topic.' },
               { label: 'Context', color: 'var(--context)', desc: 'Citation influence signal. High context = Semantic Scholar flagged this as an influential citation of your seed.' },
-              { label: 'Final', color: 'var(--accent)', desc: 'Weighted combination of all four scores. Default weights: Impact 35%, Network 25%, Relevance 25%, Context 15%.' },
+              { label: 'Final', color: 'var(--accent)', desc: 'Weighted combination of all four scores. Default weights: Impact 45%, Network 25%, Relevance 20%, Context 10%.' },
             ].map(({ label, color, desc }) => (
               <div key={label} className="flex gap-3 items-start">
                 <span

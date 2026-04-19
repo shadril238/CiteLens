@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useCallback } from 'react'
+import React, { createContext, useContext, useReducer, useCallback, useRef } from 'react'
 import type {
   AppState,
   AppAction,
@@ -91,14 +91,21 @@ const AppContext = createContext<AppContextValue | null>(null)
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
+  const abortRef = useRef<AbortController | null>(null)
 
   const analyze = useCallback((queryOverride?: string) => {
     const q = queryOverride ?? state.query
     if (!q.trim()) return
+
+    // Cancel any in-flight request before starting a new one
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     dispatch({ type: 'SET_QUERY', payload: q })
     dispatch({ type: 'SET_MODE', payload: 'loading' })
 
-    analyzePaper(q)
+    analyzePaper(q, 20, controller.signal)
       .then((result) => {
         dispatch({
           type: 'SET_RESULTS',
@@ -110,7 +117,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         })
         dispatch({ type: 'SET_MODE', payload: 'results' })
       })
-      .catch(() => {
+      .catch((err) => {
+        // Ignore aborted requests — a newer request is already in flight
+        if (err instanceof DOMException && err.name === 'AbortError') return
         dispatch({ type: 'SET_MODE', payload: 'error' })
       })
   }, [state.query])

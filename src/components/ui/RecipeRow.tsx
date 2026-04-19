@@ -16,10 +16,10 @@ const RECIPE_CONFIG: Record<RecipeType, { label: string; color: string; bg: stri
 }
 
 export const RECIPE_PILLS: RecipePill[] = [
-  { type: 'impact',    weight: '30%', score: 0 },
-  { type: 'network',   weight: '30%', score: 0 },
-  { type: 'relevance', weight: '25%', score: 0 },
-  { type: 'context',   weight: '15%', score: 0 },
+  { type: 'impact',    weight: '45%', score: 0 },
+  { type: 'network',   weight: '25%', score: 0 },
+  { type: 'relevance', weight: '20%', score: 0 },
+  { type: 'context',   weight: '10%', score: 0 },
 ]
 
 interface RecipeRowProps {
@@ -32,10 +32,10 @@ interface RecipeRowProps {
 
 export function RecipeRow({ impact, network, relevance, context, final }: RecipeRowProps) {
   const pills: RecipePill[] = [
-    { type: 'impact',    weight: '30%', score: impact    },
-    { type: 'network',   weight: '30%', score: network   },
-    { type: 'relevance', weight: '25%', score: relevance },
-    { type: 'context',   weight: '15%', score: context   },
+    { type: 'impact',    weight: '45%', score: impact    },
+    { type: 'network',   weight: '25%', score: network   },
+    { type: 'relevance', weight: '20%', score: relevance },
+    { type: 'context',   weight: '10%', score: context   },
   ]
 
   return (
