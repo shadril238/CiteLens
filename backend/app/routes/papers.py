@@ -163,25 +163,38 @@ async def analyze_paper(req: AnalyzePaperRequest) -> dict:
         return resp.model_dump(by_alias=True)
 
     seed_ss_id = seed.semantic_scholar_id
-    if not seed_ss_id:
+    seed_oa_id = seed.openalex_id
+
+    if not seed_ss_id and not seed_oa_id:
         raise HTTPException(
             status_code=422,
-            detail="Could not determine Semantic Scholar ID for this paper. "
-                   "Try using a direct Semantic Scholar URL.",
+            detail="Could not determine a citation source ID for this paper. "
+                   "Try using a direct arXiv ID, DOI, or Semantic Scholar URL.",
         )
 
-    # --- 3. Fetch citing papers from Semantic Scholar -----------------------
+    # --- 3. Fetch citing papers (SS primary, OpenAlex fallback) -------------
     sources_used: list[str] = list(seed.sources)
-    try:
-        raw_citing = await ss.get_citing_papers(seed_ss_id, limit=min(req.limit * 5, 300))
-        if "Semantic Scholar" not in sources_used:
-            sources_used.append("Semantic Scholar")
-    except UpstreamAPIError as exc:
-        logger.warning("Failed to fetch citations from SS: %s", exc)
-        raw_citing = []
+    raw_citing: list = []
+
+    if seed_ss_id:
+        try:
+            raw_citing = await ss.get_citing_papers(seed_ss_id, limit=min(req.limit * 5, 300))
+            if "Semantic Scholar" not in sources_used:
+                sources_used.append("Semantic Scholar")
+        except UpstreamAPIError as exc:
+            logger.warning("Failed to fetch citations from SS: %s", exc)
+
+    if not raw_citing and seed_oa_id:
+        logger.info("Falling back to OpenAlex for citing papers (no SS data)")
+        try:
+            raw_citing = await oa.get_citing_papers(seed_oa_id, limit=min(req.limit * 5, 300))
+            if "OpenAlex" not in sources_used:
+                sources_used.append("OpenAlex")
+        except Exception as exc:
+            logger.warning("OA citing papers failed: %s", exc)
 
     # --- 4. Enrich with OpenAlex --------------------------------------------
-    if raw_citing:
+    if raw_citing and seed_ss_id:  # only enrich if we used SS (OA papers already have metrics)
         try:
             raw_citing = await oa.enrich_batch(raw_citing)
             if "OpenAlex" not in sources_used:

@@ -101,6 +101,88 @@ async def enrich_batch(papers: list[RawPaper]) -> list[RawPaper]:
     return enriched
 
 
+async def get_citing_papers(openalex_id: str, limit: int = 200) -> list[RawPaper]:
+    """
+    Fetch papers that cite the given OpenAlex work ID.
+    Used as a fallback when Semantic Scholar ID is unavailable.
+    """
+    # Strip to bare ID like W2963403868
+    bare_id = openalex_id.split("/")[-1]
+    results: list[RawPaper] = []
+    cursor = "*"
+    per_page = min(limit, 200)
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            while len(results) < limit:
+                params = {
+                    **_params(),
+                    "filter": f"cites:{bare_id}",
+                    "per-page": per_page,
+                    "cursor": cursor,
+                    "select": "id,doi,title,authorships,publication_year,primary_location,cited_by_count,fwci,cited_by_percentile_year,ids",
+                }
+                response = await client.get(f"{_BASE}/works", params=params)
+                if not response.is_success:
+                    logger.warning("OA citing papers failed: %s", response.status_code)
+                    break
+
+                data = response.json()
+                batch = data.get("results") or []
+                if not batch:
+                    break
+
+                for item in batch:
+                    paper = _oa_work_to_raw_paper(item)
+                    results.append(paper)
+
+                cursor = (data.get("meta") or {}).get("next_cursor")
+                if not cursor or len(batch) < per_page:
+                    break
+
+    except httpx.HTTPError as exc:
+        logger.warning("OA HTTP error fetching citing papers: %s", exc)
+
+    return results[:limit]
+
+
+def _oa_work_to_raw_paper(item: dict) -> RawPaper:
+    """Convert a raw OpenAlex works result to a RawPaper."""
+    doi = (item.get("doi") or "").replace("https://doi.org/", "") or None
+    authors = [
+        (a.get("author") or {}).get("display_name", "")
+        for a in (item.get("authorships") or [])
+        if (a.get("author") or {}).get("display_name")
+    ]
+    loc = item.get("primary_location") or {}
+    source = loc.get("source") or {}
+    venue = source.get("display_name")
+
+    # Try to get SS ID from OA ids field
+    ids = item.get("ids") or {}
+    ss_id = ids.get("semantic_scholar")
+
+    oa_id = item.get("id")
+    internal_id = doi or ss_id or oa_id or item.get("title", "unknown")
+
+    cnp, fwci = _extract_metrics(item)
+
+    return RawPaper(
+        id=internal_id,
+        title=item.get("title") or "Untitled",
+        authors=authors,
+        year=item.get("publication_year"),
+        venue=venue,
+        doi=doi,
+        semantic_scholar_id=ss_id,
+        openalex_id=oa_id,
+        citation_count=item.get("cited_by_count") or 0,
+        citation_normalized_percentile=cnp,
+        fwci=fwci,
+        sources=["OpenAlex"],
+    )
+
+
 async def search_by_title(title: str, limit: int = 5) -> list[dict]:
     """
     Search OpenAlex by title. Returns raw API dicts (caller decides how to use them).
