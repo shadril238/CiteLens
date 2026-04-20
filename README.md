@@ -13,7 +13,7 @@ Paste any paper link. Get a scored, explainable list of the most important paper
 
 <br/>
 
-![CiteLens demo](docs/demo.gif)
+![CiteLens screenshot](docs/screenshot.png)
 
 </div>
 
