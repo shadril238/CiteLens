@@ -11,6 +11,10 @@ Paste any paper link. Get a scored, explainable list of the most important paper
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/Frontend-React%2018-61dafb?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
 
+<br/>
+
+![CiteLens demo](docs/demo.gif)
+
 </div>
 
 ---
@@ -282,9 +286,15 @@ CiteLens/
 
 ---
 
+## Star history
+
+If CiteLens saves you time, **[give it a star ⭐](https://github.com/kishormorol/CiteLens)** — it helps other researchers find it and costs you one click.
+
+---
+
 ## Contributing
 
-Issues, ideas, and PRs are welcome. If you find CiteLens useful, **give it a star** — it helps others find it.
+Issues, ideas, and PRs are welcome.
 
 1. Fork → create a branch → make your change
 2. `pytest tests/ -v` must pass
