@@ -105,6 +105,14 @@ export function DocsModal({ open, onClose }: Props) {
           </div>
         </Section>
 
+        <Section title="Views">
+          <div className="flex flex-col gap-2 text-sm" style={{ color: 'var(--ink-3)' }}>
+            <p><span className="font-medium" style={{ color: 'var(--ink-2)' }}>Ranked</span> — default view. Papers sorted by final score with expandable score breakdowns and abstract.</p>
+            <p><span className="font-medium" style={{ color: 'var(--ink-2)' }}>Timeline</span> — bar chart of citation activity by year with year-over-year growth.</p>
+            <p><span className="font-medium" style={{ color: 'var(--ink-2)' }}>Network</span> — force-directed graph. Nodes animate outward from the seed on load. Node size = citation count, color = score tier, distance from seed ≈ relevance. Drag any node to reposition; hover to preview; click to open a score breakdown panel.</p>
+          </div>
+        </Section>
+
         <Section title="Filters & sorting">
           <div className="flex flex-col gap-2 text-sm" style={{ color: 'var(--ink-3)' }}>
             <p><span className="font-medium" style={{ color: 'var(--ink-2)' }}>Publication year</span> — slide both handles to narrow results to a specific time window.</p>
@@ -119,6 +127,7 @@ export function DocsModal({ open, onClose }: Props) {
             {[
               'Use an arXiv ID or DOI for the most reliable results — title search can fail for obscure papers.',
               'Switch to Timeline tab to see how citation activity has grown year-over-year.',
+              'Switch to Network tab to explore the citation landscape spatially — drag nodes to rearrange.',
               'Use the Tweaks panel to change layout, theme, accent colour, and display density.',
               'Click any paper row to expand it and see the full score breakdown and abstract.',
             ].map((tip) => (

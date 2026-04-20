@@ -13,6 +13,20 @@ const CHANGELOG: {
   items: string[]
 }[] = [
   {
+    version: '1.4.0',
+    date: 'Apr 2026',
+    tag: 'feature',
+    items: [
+      'Network tab: force-directed citation graph — nodes fly outward from seed on load.',
+      'Node size encodes citation count; color encodes final score tier; distance from seed encodes relevance.',
+      'Drag any node to reposition it; simulation re-wakes and re-settles around the new position.',
+      'Hover dims all other nodes to 15% opacity for focused inspection.',
+      'Click a node to open an in-graph score-breakdown panel (Final, Network, Impact, Relevance bars).',
+      'Labels rendered for the top-5 highest-scoring papers, positioned radially outward.',
+      'SVG glow filter on seed node and hovered/selected nodes.',
+    ],
+  },
+  {
     version: '1.3.0',
     date: 'Apr 2026',
     tag: 'feature',
