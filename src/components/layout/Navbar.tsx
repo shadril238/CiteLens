@@ -1,9 +1,50 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { LogoIcon, SearchIcon, SlidersIcon, SunIcon, MoonIcon } from '../ui/Icons'
 import { useApp } from '../../context/AppContext'
 import { MethodologyModal } from '../modals/MethodologyModal'
 import { DocsModal } from '../modals/DocsModal'
 import { ChangelogModal } from '../modals/ChangelogModal'
+
+function StarButton() {
+  const [count, setCount] = useState<number | null>(null)
+
+  useEffect(() => {
+    fetch('https://api.github.com/repos/kishormorol/CiteLens')
+      .then((r) => r.json())
+      .then((d) => { if (typeof d.stargazers_count === 'number') setCount(d.stargazers_count) })
+      .catch(() => {})
+  }, [])
+
+  const label = count === null ? '—' : count >= 1000 ? `${(count / 1000).toFixed(1)}k` : `${count}`
+
+  return (
+    <a
+      href="https://github.com/kishormorol/CiteLens"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="hidden sm:flex items-center rounded-lg border border-[var(--line)] overflow-hidden text-sm transition-colors hover:border-[var(--line-2)] hover:bg-[var(--bg-2)]"
+      aria-label="Star CiteLens on GitHub"
+    >
+      {/* Star action */}
+      <span
+        className="flex items-center gap-1.5 px-2.5 py-1.5 border-r border-[var(--line)]"
+        style={{ color: 'var(--ink-3)' }}
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z" />
+        </svg>
+        Star
+      </span>
+      {/* Count */}
+      <span
+        className="px-2 py-1.5 font-mono text-xs tabular-nums"
+        style={{ color: 'var(--ink-3)', minWidth: 28, textAlign: 'center' }}
+      >
+        {label}
+      </span>
+    </a>
+  )
+}
 
 type ModalKey = 'methodology' | 'docs' | 'changelog' | null
 
@@ -81,6 +122,9 @@ export function Navbar() {
               ⌘K
             </kbd>
           </button>
+
+          {/* GitHub star */}
+          <StarButton />
 
           {/* Theme toggle */}
           <button
