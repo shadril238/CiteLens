@@ -59,7 +59,7 @@ Weights are renormalized when a signal is missing. Every result shows the full b
 - **Per-paper explanations** — plain-English "Why ranked here" for every result
 - **Smart filters** — year range, minimum relevance score, influential-only, reviews-only
 - **Timeline view** — visualize how citation activity has grown year by year
-- **Network graph** — interactive radial citation map; node size = citations, color = score tier, rings encode relevance distance from seed; hover to preview, click to inspect score breakdown
+- **Network graph** — force-directed citation graph; nodes animate outward from seed on load; node size = citations, color = score tier, distance from seed ≈ relevance; drag to reposition, hover to preview, click to inspect score breakdown
 - **Four sort modes** — Most Influential, Most Relevant, Recent, Reviews
 - **Dark mode** — full token-driven palette, five accent colors, compact/cozy density
 - **Zero config** — works out of the box in demo mode with no API keys
@@ -270,7 +270,7 @@ CiteLens/
 - [x] Four-signal ranking (Impact, Network, Relevance, Context)
 - [x] Per-paper explainability — plain-English score breakdown
 - [x] Timeline view — citation arc over time
-- [x] Network graph — interactive radial citation map with score tiers and hover inspection
+- [x] Network graph — force-directed graph with physics simulation, drag, hover dim, click panel
 - [x] Dark mode, five accent themes, density modes
 - [x] Full frontend ↔ backend integration
 - [x] React error boundary + input validation
