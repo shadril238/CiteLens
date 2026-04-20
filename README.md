@@ -286,6 +286,23 @@ CiteLens/
 
 ---
 
+## Alternatives comparison
+
+If you're evaluating CiteLens against other tools:
+
+| Tool | Free | Open source | Ranked scores | Explanations | No sign-up |
+|---|---|---|---|---|---|
+| **CiteLens** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| [Connected Papers](https://www.connectedpapers.com) | Partial | ❌ | ❌ | ❌ | ❌ |
+| [scite.ai](https://scite.ai) | ❌ | ❌ | ❌ | Partial | ❌ |
+| [ResearchRabbit](https://www.researchrabbit.ai) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| [Litmaps](https://www.litmaps.com) | Partial | ❌ | ❌ | ❌ | ❌ |
+| [Inciteful](https://inciteful.xyz) | ✅ | ❌ | Partial | ❌ | ✅ |
+
+CiteLens is the only tool that gives every citing paper a **multi-signal score with a plain-English breakdown** — for free, with no account required.
+
+---
+
 ## Star history
 
 If CiteLens saves you time, **[give it a star ⭐](https://github.com/kishormorol/CiteLens)** — it helps other researchers find it and costs you one click.
