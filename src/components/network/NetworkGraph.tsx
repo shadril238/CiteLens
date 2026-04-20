@@ -1,21 +1,68 @@
-import React, { useMemo, useState, useRef } from 'react'
+/**
+ * NetworkGraph — force-directed citation graph.
+ *
+ * Physics (no external deps):
+ *   - Charge repulsion between all node pairs
+ *   - Radial spring: each node pulled toward its score-based ideal radius
+ *   - Collision: nodes cannot overlap
+ *   - Velocity damping + alpha cooling → simulation settles naturally
+ *
+ * Interaction:
+ *   - Animated on mount (nodes fly from center)
+ *   - Drag any node to reposition
+ *   - Hover to preview; click to open score-breakdown panel
+ */
+
+import React, {
+  useMemo,
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+} from 'react'
 import { useApp } from '../../context/AppContext'
 import { usePapers } from '../../hooks/usePapers'
 import type { Paper } from '../../types'
 
-// ── Layout ────────────────────────────────────────────────────────────────────
+// ─── Canvas dimensions ────────────────────────────────────────────────────────
 
-const CX = 400
-const CY = 245
-const SEED_R = 24
-const RINGS = { inner: 108, mid: 170, outer: 232 } as const
-const NODE_MIN = 5
-const NODE_MAX = 15
+const W = 800
+const H = 500
+const CX = W / 2
+const CY = H / 2
+const SEED_R = 26
+const NODE_MIN = 6
+const NODE_MAX = 18
+
+// ─── Physics constants ────────────────────────────────────────────────────────
+
+const CHARGE = 2400      // node-node repulsion
+const RADIAL_K = 0.06    // spring toward ideal radius
+const DAMPING = 0.72     // velocity decay per tick
+const ALPHA_START = 1.0
+const ALPHA_DECAY = 0.022
+const MIN_ALPHA = 0.003
+const TICK_CAP = 200     // max ticks (safety)
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface SimNode {
+  paper: Paper
+  x: number
+  y: number
+  vx: number
+  vy: number
+  r: number
+  color: string
+  idealRadius: number
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function scoreColor(s: number) {
-  if (s >= 80) return 'var(--accent)'
-  if (s >= 60) return 'var(--impact)'
-  if (s >= 40) return 'var(--relevance)'
+  if (s >= 75) return 'var(--accent)'
+  if (s >= 55) return 'var(--impact)'
+  if (s >= 35) return 'var(--relevance)'
   return 'var(--ink-4)'
 }
 
@@ -23,480 +70,514 @@ function truncate(s: string, n: number) {
   return s.length <= n ? s : s.slice(0, n - 1) + '…'
 }
 
-interface NodePos {
-  paper: Paper
-  x: number
-  y: number
-  r: number
-  color: string
-  ring: 'inner' | 'mid' | 'outer'
-  labelAngle: number // radians, outward from center
-}
-
-function computeLayout(papers: Paper[]): NodePos[] {
+function initNodes(papers: Paper[]): SimNode[] {
   if (!papers.length) return []
-
   const maxCit = Math.max(...papers.map((p) => p.citations), 1)
-
-  // Sort by final score desc to assign rings
-  const byScore = [...papers].sort((a, b) => b.final - a.final)
-  const n = byScore.length
-  const innerCount = Math.max(1, Math.round(n * 0.25))
-  const outerCount = Math.max(1, Math.round(n * 0.25))
-
-  const ringOf = (i: number): 'inner' | 'mid' | 'outer' =>
-    i < innerCount ? 'inner' : i >= n - outerCount ? 'outer' : 'mid'
-
-  // Group papers by ring
-  const groups: Record<'inner' | 'mid' | 'outer', Paper[]> = {
-    inner: [],
-    mid: [],
-    outer: [],
-  }
-  byScore.forEach((p, i) => groups[ringOf(i)].push(p))
-
-  const nodes: NodePos[] = []
-
-  for (const ring of ['inner', 'mid', 'outer'] as const) {
-    const list = groups[ring]
-    const R = RINGS[ring]
-    list.forEach((paper, i) => {
-      const angle = (i / list.length) * 2 * Math.PI - Math.PI / 2
-      const x = CX + R * Math.cos(angle)
-      const y = CY + R * Math.sin(angle)
-      const logScale = Math.log1p(paper.citations) / Math.log1p(maxCit)
-      const r = NODE_MIN + logScale * (NODE_MAX - NODE_MIN)
-      nodes.push({ paper, x, y, r, color: scoreColor(paper.final), ring, labelAngle: angle })
-    })
-  }
-
-  return nodes
+  return papers.map((paper, i) => {
+    // Start nodes in a tight circle around center so they visibly fly out
+    const angle = (i / papers.length) * Math.PI * 2
+    const r = NODE_MIN + (Math.log1p(paper.citations) / Math.log1p(maxCit)) * (NODE_MAX - NODE_MIN)
+    // Higher score → closer to seed
+    const idealRadius = 85 + (1 - paper.final / 100) * 150
+    return {
+      paper,
+      x: CX + Math.cos(angle) * 30,
+      y: CY + Math.sin(angle) * 30,
+      vx: Math.cos(angle) * 2,
+      vy: Math.sin(angle) * 2,
+      r,
+      color: scoreColor(paper.final),
+      idealRadius,
+    }
+  })
 }
 
-// ── Selected paper panel ──────────────────────────────────────────────────────
+function runTick(nodes: SimNode[], alpha: number): SimNode[] {
+  const n = nodes.length
+  const next = nodes.map((nd) => ({ ...nd }))
 
-function ScoreBar({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-[10px] w-16 flex-shrink-0" style={{ color: 'var(--ink-4)' }}>
-        {label}
-      </span>
-      <div className="flex-1 h-1.5 rounded-full" style={{ background: 'var(--bg-3)' }}>
-        <div
-          className="h-full rounded-full"
-          style={{ width: `${value}%`, background: color, opacity: 0.85 }}
-        />
-      </div>
-      <span className="text-[10px] font-mono w-6 text-right flex-shrink-0" style={{ color }}>
-        {value}
-      </span>
-    </div>
-  )
+  // 1. Charge repulsion between every pair
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const a = next[i], b = next[j]
+      let dx = b.x - a.x, dy = b.y - a.y
+      const dist2 = dx * dx + dy * dy || 1
+      const dist = Math.sqrt(dist2)
+      const force = (CHARGE * alpha) / dist2
+      const fx = (dx / dist) * force
+      const fy = (dy / dist) * force
+      a.vx -= fx; a.vy -= fy
+      b.vx += fx; b.vy += fy
+    }
+  }
+
+  // 2. Radial spring: pull each node toward its ideal radius from center
+  for (const nd of next) {
+    const dx = nd.x - CX, dy = nd.y - CY
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1
+    const diff = dist - nd.idealRadius
+    nd.vx -= (dx / dist) * diff * RADIAL_K * alpha
+    nd.vy -= (dy / dist) * diff * RADIAL_K * alpha
+  }
+
+  // 3. Collision: push overlapping nodes apart
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const a = next[i], b = next[j]
+      const dx = b.x - a.x, dy = b.y - a.y
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1
+      const minDist = a.r + b.r + 8
+      if (dist < minDist) {
+        const push = (minDist - dist) / 2
+        const px = (dx / dist) * push * 0.6
+        const py = (dy / dist) * push * 0.6
+        a.x -= px; a.y -= py
+        b.x += px; b.y += py
+      }
+    }
+  }
+
+  // 4. Apply velocity + damping + boundary clamp
+  for (const nd of next) {
+    nd.vx *= DAMPING
+    nd.vy *= DAMPING
+    nd.x += nd.vx
+    nd.y += nd.vy
+    const pad = nd.r + 18
+    nd.x = Math.max(pad, Math.min(W - pad, nd.x))
+    nd.y = Math.max(pad, Math.min(H - pad, nd.y))
+  }
+
+  return next
 }
 
-function SelectedPanel({
-  paper,
-  onClose,
-  onGoToRanked,
+// ─── Force simulation hook ────────────────────────────────────────────────────
+
+function useForceSimulation(papers: Paper[]) {
+  const [nodes, setNodes] = useState<SimNode[]>([])
+  const stateRef = useRef<{ nodes: SimNode[]; alpha: number; ticks: number }>({
+    nodes: [],
+    alpha: ALPHA_START,
+    ticks: 0,
+  })
+  const rafRef = useRef<number>()
+
+  useEffect(() => {
+    const init = initNodes(papers)
+    stateRef.current = { nodes: init, alpha: ALPHA_START, ticks: 0 }
+    setNodes(init)
+
+    function loop() {
+      const s = stateRef.current
+      if (s.alpha < MIN_ALPHA || s.ticks >= TICK_CAP) return
+      s.alpha *= 1 - ALPHA_DECAY
+      s.ticks++
+      s.nodes = runTick(s.nodes, s.alpha)
+      setNodes([...s.nodes])
+      rafRef.current = requestAnimationFrame(loop)
+    }
+
+    rafRef.current = requestAnimationFrame(loop)
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    }
+  }, [papers])
+
+  const moveNode = useCallback((id: number, x: number, y: number) => {
+    stateRef.current.nodes = stateRef.current.nodes.map((nd) =>
+      nd.paper.id === id ? { ...nd, x, y, vx: 0, vy: 0 } : nd
+    )
+    // Wake simulation back up after drag
+    stateRef.current.alpha = Math.max(stateRef.current.alpha, 0.1)
+    stateRef.current.ticks = 0
+    setNodes([...stateRef.current.nodes])
+
+    // Restart if settled
+    if (!rafRef.current) {
+      function loop() {
+        const s = stateRef.current
+        if (s.alpha < MIN_ALPHA || s.ticks >= TICK_CAP) { rafRef.current = undefined; return }
+        s.alpha *= 1 - ALPHA_DECAY
+        s.ticks++
+        s.nodes = runTick(s.nodes, s.alpha)
+        setNodes([...s.nodes])
+        rafRef.current = requestAnimationFrame(loop)
+      }
+      rafRef.current = requestAnimationFrame(loop)
+    }
+  }, [])
+
+  return { nodes, moveNode }
+}
+
+// ─── SVG gradient edge ────────────────────────────────────────────────────────
+
+function Edge({
+  x1, y1, x2, y2, color, faded, highlighted,
 }: {
-  paper: Paper
-  onClose: () => void
-  onGoToRanked: () => void
+  x1: number; y1: number; x2: number; y2: number
+  color: string; faded: boolean; highlighted: boolean
 }) {
   return (
-    <div
-      className="border-t border-[var(--line)] p-4"
-      style={{ background: 'var(--bg-2)' }}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium leading-snug" style={{ color: 'var(--ink)' }}>
-            {paper.title}
-          </p>
-          <p className="text-[11px] mt-0.5" style={{ color: 'var(--ink-3)' }}>
-            {truncate(paper.authors, 60)}
-          </p>
-          <div className="flex items-center gap-2 mt-1 text-[10px]" style={{ color: 'var(--ink-4)' }}>
-            <span>{paper.year || '—'}</span>
-            {paper.venue && <><span>·</span><span>{truncate(paper.venue, 28)}</span></>}
-            <span>·</span>
-            <span>{paper.citations.toLocaleString()} citations</span>
-          </div>
-        </div>
-        <button
-          onClick={onClose}
-          className="flex-shrink-0 text-[11px] px-2 py-1 rounded"
-          style={{ color: 'var(--ink-4)', background: 'var(--bg-3)' }}
-        >
-          ✕
-        </button>
-      </div>
-
-      <div className="mt-3 flex flex-col gap-1.5">
-        <ScoreBar label="Final"     value={paper.final}     color="var(--accent)"    />
-        <ScoreBar label="Network"   value={paper.network}   color="var(--network)"   />
-        <ScoreBar label="Impact"    value={paper.impact}    color="var(--impact)"    />
-        <ScoreBar label="Relevance" value={paper.relevance} color="var(--relevance)" />
-      </div>
-
-      <button
-        onClick={onGoToRanked}
-        className="mt-3 text-[11px] font-medium px-3 py-1.5 rounded-lg transition-colors"
-        style={{
-          background: 'var(--accent-weak)',
-          color: 'var(--accent-ink)',
-          border: '1px solid var(--accent-line)',
-        }}
-      >
-        View full details in ranked list →
-      </button>
-    </div>
+    <line
+      x1={x1} y1={y1} x2={x2} y2={y2}
+      stroke={highlighted ? color : 'var(--line-2)'}
+      strokeWidth={highlighted ? 1.8 : 1}
+      strokeOpacity={faded ? 0.06 : highlighted ? 0.6 : 0.25}
+      style={{ transition: 'stroke-opacity 0.2s, stroke-width 0.2s' }}
+    />
   )
 }
 
-// ── Tooltip (hover) ───────────────────────────────────────────────────────────
+// ─── Hover tooltip ────────────────────────────────────────────────────────────
 
-interface TooltipState {
-  paper: Paper
-  svgX: number
-  svgY: number
-}
+interface TooltipState { paper: Paper; sx: number; sy: number }
 
-function Tooltip({ tip, containerW }: { tip: TooltipState; containerW: number }) {
-  const W = 210
-  const left = tip.svgX + W + 20 > containerW ? tip.svgX - W - 10 : tip.svgX + 12
-  const top = Math.max(8, tip.svgY - 40)
+function Tooltip({ tip, cw }: { tip: TooltipState; cw: number }) {
+  const W_TIP = 220
+  const left = tip.sx + W_TIP + 18 > cw ? tip.sx - W_TIP - 10 : tip.sx + 12
+  const top  = Math.max(6, tip.sy - 44)
   return (
     <div
       className="absolute pointer-events-none z-20 rounded-xl border border-[var(--line)] px-3 py-2.5"
-      style={{ background: 'var(--bg-1)', left, top, width: W, boxShadow: 'var(--shadow-md)' }}
+      style={{ background: 'var(--bg-1)', left, top, width: W_TIP, boxShadow: 'var(--shadow-md)' }}
     >
-      <p className="text-[11px] font-medium leading-snug mb-1" style={{ color: 'var(--ink)' }}>
-        {truncate(tip.paper.title, 60)}
+      <p className="text-[11px] font-medium leading-snug" style={{ color: 'var(--ink)' }}>
+        {truncate(tip.paper.title, 58)}
       </p>
-      <div className="flex items-center gap-2 text-[10px]" style={{ color: 'var(--ink-4)' }}>
-        <span>{tip.paper.year || '—'}</span>
-        {tip.paper.venue && <><span>·</span><span>{truncate(tip.paper.venue, 18)}</span></>}
-      </div>
-      <div className="flex items-center gap-3 mt-1.5">
+      <p className="text-[10px] mt-0.5" style={{ color: 'var(--ink-4)' }}>
+        {tip.paper.year || '—'}{tip.paper.venue ? ` · ${truncate(tip.paper.venue, 20)}` : ''}
+      </p>
+      <div className="flex gap-4 mt-2">
         {[
-          { l: 'Final', v: tip.paper.final, c: 'var(--accent)' },
-          { l: 'Net', v: tip.paper.network, c: 'var(--network)' },
+          { l: 'Final',   v: tip.paper.final,   c: 'var(--accent)'    },
+          { l: 'Network', v: tip.paper.network,  c: 'var(--network)'   },
+          { l: 'Impact',  v: tip.paper.impact,   c: 'var(--impact)'    },
         ].map(({ l, v, c }) => (
           <div key={l} className="flex flex-col items-center">
             <span className="text-[11px] font-mono font-semibold" style={{ color: c }}>{v}</span>
             <span className="text-[9px]" style={{ color: 'var(--ink-4)' }}>{l}</span>
           </div>
         ))}
-        <div className="flex flex-col items-center">
-          <span className="text-[11px] font-mono font-semibold" style={{ color: 'var(--impact)' }}>
-            {tip.paper.citations >= 1000
-              ? `${(tip.paper.citations / 1000).toFixed(0)}K`
-              : tip.paper.citations}
-          </span>
-          <span className="text-[9px]" style={{ color: 'var(--ink-4)' }}>Cit</span>
-        </div>
       </div>
-      <p className="text-[9px] mt-1.5" style={{ color: 'var(--ink-5)' }}>
-        Click to inspect
-      </p>
+      <p className="text-[9px] mt-1.5" style={{ color: 'var(--ink-5)' }}>Drag · Click to inspect</p>
     </div>
   )
 }
 
-// ── Legend ────────────────────────────────────────────────────────────────────
+// ─── Score bar ────────────────────────────────────────────────────────────────
+
+function ScoreBar({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] w-16 flex-shrink-0" style={{ color: 'var(--ink-4)' }}>{label}</span>
+      <div className="flex-1 h-1.5 rounded-full" style={{ background: 'var(--bg-3)' }}>
+        <div className="h-full rounded-full" style={{ width: `${value}%`, background: color, opacity: 0.85 }} />
+      </div>
+      <span className="text-[10px] font-mono w-6 text-right flex-shrink-0" style={{ color }}>{value}</span>
+    </div>
+  )
+}
+
+// ─── Selected panel ───────────────────────────────────────────────────────────
+
+function SelectedPanel({
+  paper, onClose, onGo,
+}: { paper: Paper; onClose: () => void; onGo: () => void }) {
+  return (
+    <div className="border-t border-[var(--line)] p-4" style={{ background: 'var(--bg-2)' }}>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium leading-snug" style={{ color: 'var(--ink)' }}>{paper.title}</p>
+          <p className="text-[11px] mt-0.5" style={{ color: 'var(--ink-3)' }}>{truncate(paper.authors, 60)}</p>
+          <div className="flex gap-2 mt-1 text-[10px]" style={{ color: 'var(--ink-4)' }}>
+            <span>{paper.year || '—'}</span>
+            {paper.venue && <><span>·</span><span>{truncate(paper.venue, 30)}</span></>}
+            <span>·</span><span>{paper.citations.toLocaleString()} citations</span>
+          </div>
+        </div>
+        <button onClick={onClose} className="flex-shrink-0 text-[11px] px-2 py-1 rounded"
+          style={{ color: 'var(--ink-4)', background: 'var(--bg-3)' }}>✕</button>
+      </div>
+      <div className="flex flex-col gap-1.5 mb-3">
+        <ScoreBar label="Final"     value={paper.final}     color="var(--accent)"    />
+        <ScoreBar label="Network"   value={paper.network}   color="var(--network)"   />
+        <ScoreBar label="Impact"    value={paper.impact}    color="var(--impact)"    />
+        <ScoreBar label="Relevance" value={paper.relevance} color="var(--relevance)" />
+      </div>
+      <button onClick={onGo}
+        className="text-[11px] font-medium px-3 py-1.5 rounded-lg"
+        style={{ background: 'var(--accent-weak)', color: 'var(--accent-ink)', border: '1px solid var(--accent-line)' }}>
+        View full details in ranked list →
+      </button>
+    </div>
+  )
+}
+
+// ─── Legend ───────────────────────────────────────────────────────────────────
 
 function Legend() {
   return (
-    <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-      <span className="text-xs font-medium" style={{ color: 'var(--ink-3)' }}>Score</span>
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+      <span className="text-xs font-medium" style={{ color: 'var(--ink-3)' }}>Final score</span>
       {[
-        { color: 'var(--accent)',    label: '80–100' },
-        { color: 'var(--impact)',    label: '60–79'  },
-        { color: 'var(--relevance)', label: '40–59'  },
-        { color: 'var(--ink-4)',     label: '0–39'   },
+        { color: 'var(--accent)',    label: '75–100' },
+        { color: 'var(--impact)',    label: '55–74' },
+        { color: 'var(--relevance)', label: '35–54' },
+        { color: 'var(--ink-4)',     label: '0–34'  },
       ].map(({ color, label }) => (
         <div key={label} className="flex items-center gap-1.5">
-          <span className="inline-block rounded-full" style={{ width: 8, height: 8, background: color }} />
+          <span className="rounded-full inline-block" style={{ width: 8, height: 8, background: color }} />
           <span className="text-[11px] font-mono" style={{ color: 'var(--ink-3)' }}>{label}</span>
         </div>
       ))}
-      <span className="text-[11px] ml-1" style={{ color: 'var(--ink-4)' }}>· Size = citations · Ring = score tier</span>
+      <span className="text-[11px]" style={{ color: 'var(--ink-4)' }}>· Size = citations · Distance = relevance</span>
     </div>
   )
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export function NetworkGraph() {
   const { state, dispatch } = useApp()
   const papers = usePapers()
-  const [tooltip, setTooltip] = useState<TooltipState | null>(null)
+  const { nodes, moveNode } = useForceSimulation(papers)
+
+  const [tooltip, setTooltip]     = useState<TooltipState | null>(null)
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const [panelPaper, setPanelPaper] = useState<Paper | null>(null)
+  const [dragging, setDragging]   = useState<{ id: number; ox: number; oy: number } | null>(null)
+  const svgRef     = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const nodes = useMemo(() => computeLayout(papers), [papers])
+  // Clear panel when papers change (new search)
+  useEffect(() => { setPanelPaper(null) }, [papers])
 
-  const avgFinal = papers.length
-    ? Math.round(papers.reduce((s, p) => s + p.final, 0) / papers.length)
-    : 0
-  const topNetwork = papers.length ? Math.max(...papers.map((p) => p.network)) : 0
+  // ── SVG coordinate helper ────────────────────────────────────────────────────
+  function toSVG(clientX: number, clientY: number): [number, number] {
+    const rect = svgRef.current!.getBoundingClientRect()
+    return [
+      (clientX - rect.left) * (W / rect.width),
+      (clientY - rect.top)  * (H / rect.height),
+    ]
+  }
 
-  // Top papers in inner ring get labels (up to 4)
-  const labeledIds = useMemo(() => {
-    return new Set(
-      nodes
-        .filter((n) => n.ring === 'inner')
-        .slice(0, 4)
-        .map((n) => n.paper.id),
-    )
-  }, [nodes])
+  // ── Drag handlers ────────────────────────────────────────────────────────────
+  function onNodeMouseDown(e: React.MouseEvent, node: SimNode) {
+    e.stopPropagation()
+    const [sx, sy] = toSVG(e.clientX, e.clientY)
+    setDragging({ id: node.paper.id, ox: sx - node.x, oy: sy - node.y })
+    setTooltip(null)
+  }
 
-  function handleNodeClick(paper: Paper) {
+  function onSVGMouseMove(e: React.MouseEvent<SVGSVGElement>) {
+    if (dragging) {
+      const [sx, sy] = toSVG(e.clientX, e.clientY)
+      moveNode(dragging.id, sx - dragging.ox, sy - dragging.oy)
+    }
+  }
+
+  function onSVGMouseUp() { setDragging(null) }
+
+  // ── Hover handlers ───────────────────────────────────────────────────────────
+  function onNodeMouseEnter(e: React.MouseEvent, paper: Paper) {
+    if (dragging) return
+    const rect = containerRef.current!.getBoundingClientRect()
+    setHoveredId(paper.id)
+    setTooltip({ paper, sx: e.clientX - rect.left, sy: e.clientY - rect.top })
+  }
+
+  function onNodeMouseMove(e: React.MouseEvent) {
+    if (!tooltip || dragging) return
+    const rect = containerRef.current!.getBoundingClientRect()
+    setTooltip((t) => t && { ...t, sx: e.clientX - rect.left, sy: e.clientY - rect.top })
+  }
+
+  function onNodeMouseLeave() { if (!dragging) { setHoveredId(null); setTooltip(null) } }
+
+  // ── Click ────────────────────────────────────────────────────────────────────
+  function onNodeClick(paper: Paper) {
+    if (dragging) return
     setPanelPaper((prev) => (prev?.id === paper.id ? null : paper))
     dispatch({ type: 'SELECT_PAPER', payload: paper.id })
   }
 
-  function handleMouseEnter(e: React.MouseEvent<SVGGElement>, paper: Paper) {
-    const rect = containerRef.current?.getBoundingClientRect()
-    if (!rect) return
-    setHoveredId(paper.id)
-    setTooltip({ paper, svgX: e.clientX - rect.left, svgY: e.clientY - rect.top })
-  }
-
-  function handleMouseMove(e: React.MouseEvent<SVGGElement>) {
-    const rect = containerRef.current?.getBoundingClientRect()
-    if (!rect || !tooltip) return
-    setTooltip((t) => t && { ...t, svgX: e.clientX - rect.left, svgY: e.clientY - rect.top })
-  }
-
-  function handleMouseLeave() {
-    setHoveredId(null)
-    setTooltip(null)
-  }
-
-  function goToRanked(paper: Paper) {
-    dispatch({ type: 'SELECT_PAPER', payload: paper.id })
-    dispatch({ type: 'SET_RESULTS_TAB', payload: 'ranked' })
-  }
+  // ── Top-N label set ──────────────────────────────────────────────────────────
+  const labelIds = useMemo(() => {
+    const sorted = [...papers].sort((a, b) => b.final - a.final)
+    return new Set(sorted.slice(0, 5).map((p) => p.id))
+  }, [papers])
 
   if (papers.length === 0) {
     return (
-      <div
-        className="flex flex-col items-center justify-center py-16 px-4 rounded-2xl border border-dashed border-[var(--line)]"
-        style={{ background: 'var(--bg-1)' }}
-      >
-        <p className="text-base font-medium mb-1" style={{ color: 'var(--ink-3)' }}>
-          No papers match these filters
-        </p>
-        <p className="text-sm" style={{ color: 'var(--ink-4)' }}>
-          Try widening the year range or lowering the relevance threshold
-        </p>
+      <div className="flex flex-col items-center justify-center py-16 px-4 rounded-2xl border border-dashed border-[var(--line)]"
+        style={{ background: 'var(--bg-1)' }}>
+        <p className="text-base font-medium mb-1" style={{ color: 'var(--ink-3)' }}>No papers match these filters</p>
+        <p className="text-sm" style={{ color: 'var(--ink-4)' }}>Try widening the year range or lowering the relevance threshold</p>
       </div>
     )
   }
 
-  const containerW = containerRef.current?.offsetWidth ?? 800
-  const dimmed = hoveredId !== null
+  const dimmed   = hoveredId !== null || dragging !== null
+  const avgFinal = Math.round(papers.reduce((s, p) => s + p.final, 0) / papers.length)
+  const topNet   = Math.max(...papers.map((p) => p.network))
+  const cw       = containerRef.current?.offsetWidth ?? 800
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Stats */}
-      <div
-        className="rounded-2xl border border-[var(--line)] p-5"
-        style={{ background: 'var(--bg-1)' }}
-      >
-        <div className="flex flex-wrap gap-8 mb-5">
+
+      {/* Stats row */}
+      <div className="rounded-2xl border border-[var(--line)] p-5" style={{ background: 'var(--bg-1)' }}>
+        <div className="flex flex-wrap gap-8 mb-4">
           {[
-            { value: papers.length.toString(), label: 'papers in graph',    color: 'var(--accent)'   },
-            { value: `${topNetwork}`,           label: 'top network score',  color: 'var(--network)'  },
-            { value: `${avgFinal}`,             label: 'avg final score',    color: 'var(--impact)'   },
-          ].map(({ value, label, color }) => (
-            <div key={label}>
-              <div className="text-3xl font-mono font-semibold leading-none" style={{ color }}>{value}</div>
-              <div className="text-xs mt-1" style={{ color: 'var(--ink-4)' }}>{label}</div>
+            { v: papers.length.toString(), l: 'papers in graph',   c: 'var(--accent)'  },
+            { v: `${topNet}`,              l: 'top network score', c: 'var(--network)' },
+            { v: `${avgFinal}`,            l: 'avg final score',   c: 'var(--impact)'  },
+          ].map(({ v, l, c }) => (
+            <div key={l}>
+              <div className="text-3xl font-mono font-semibold leading-none" style={{ color: c }}>{v}</div>
+              <div className="text-xs mt-1" style={{ color: 'var(--ink-4)' }}>{l}</div>
             </div>
           ))}
         </div>
         <Legend />
       </div>
 
-      {/* Graph + panel */}
-      <div
-        ref={containerRef}
-        className="relative rounded-2xl border border-[var(--line)] overflow-hidden"
-        style={{ background: 'var(--bg-1)' }}
-      >
+      {/* Graph */}
+      <div ref={containerRef} className="relative rounded-2xl border border-[var(--line)] overflow-hidden"
+        style={{ background: 'var(--bg-1)' }}>
         <svg
-          viewBox="0 0 800 490"
-          className="w-full"
-          style={{ height: 490, display: 'block' }}
+          ref={svgRef}
+          viewBox={`0 0 ${W} ${H}`}
+          className="w-full select-none"
+          style={{ height: H, display: 'block', cursor: dragging ? 'grabbing' : 'default' }}
+          onMouseMove={onSVGMouseMove}
+          onMouseUp={onSVGMouseUp}
+          onMouseLeave={onSVGMouseUp}
           aria-label="Citation network graph"
         >
           <defs>
-            <radialGradient id="seedGlow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+            <radialGradient id="ng-seed-glow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%"   stopColor="var(--accent)" stopOpacity="0.4" />
+              <stop offset="100%" stopColor="var(--accent)" stopOpacity="0"   />
             </radialGradient>
-            <radialGradient id="innerGlow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.06" />
-              <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-            </radialGradient>
+            <filter id="ng-glow" x="-40%" y="-40%" width="180%" height="180%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
           </defs>
 
-          {/* Background ring guides */}
-          {(['inner', 'mid', 'outer'] as const).map((ring) => (
-            <circle
-              key={ring}
-              cx={CX}
-              cy={CY}
-              r={RINGS[ring]}
-              fill={ring === 'inner' ? 'url(#innerGlow)' : 'none'}
-              stroke="var(--line)"
-              strokeWidth="1"
-              strokeDasharray={ring === 'inner' ? '3 5' : '2 7'}
-              strokeOpacity={ring === 'inner' ? 0.6 : 0.35}
+          {/* Seed glow halo */}
+          <circle cx={CX} cy={CY} r={SEED_R + 36} fill="url(#ng-seed-glow)" />
+
+          {/* Edges */}
+          {nodes.map((nd) => (
+            <Edge
+              key={`e-${nd.paper.id}`}
+              x1={CX} y1={CY} x2={nd.x} y2={nd.y}
+              color={nd.color}
+              highlighted={nd.paper.id === hoveredId || nd.paper.id === panelPaper?.id}
+              faded={dimmed && nd.paper.id !== hoveredId && nd.paper.id !== panelPaper?.id}
             />
           ))}
 
-          {/* Ring labels */}
-          {[
-            { ring: 'inner' as const, label: 'top tier' },
-            { ring: 'mid'   as const, label: 'mid tier' },
-            { ring: 'outer' as const, label: 'low tier' },
-          ].map(({ ring, label }) => (
-            <text
-              key={ring}
-              x={CX + RINGS[ring] + 6}
-              y={CY + 4}
-              fontSize="9"
-              fontFamily="JetBrains Mono, monospace"
-              fill="var(--ink-5)"
-              style={{ userSelect: 'none', pointerEvents: 'none' }}
-            >
-              {label}
-            </text>
-          ))}
-
-          {/* Seed glow */}
-          <circle cx={CX} cy={CY} r={SEED_R + 32} fill="url(#seedGlow)" />
-
-          {/* Edges */}
-          {nodes.map(({ paper, x, y, color }) => {
-            const isHovered = paper.id === hoveredId
-            const isSelected = paper.id === panelPaper?.id
-            return (
-              <line
-                key={`edge-${paper.id}`}
-                x1={CX} y1={CY} x2={x} y2={y}
-                stroke={isHovered || isSelected ? color : 'var(--line-2)'}
-                strokeWidth={isHovered || isSelected ? 1.5 : 1}
-                strokeOpacity={dimmed && !isHovered && !isSelected ? 0.1 : isHovered || isSelected ? 0.55 : 0.3}
-                style={{ transition: 'stroke-opacity 0.15s, stroke-width 0.15s' }}
-              />
-            )
-          })}
-
-          {/* Nodes */}
-          {nodes.map(({ paper, x, y, r, color, labelAngle }) => {
-            const isHovered = paper.id === hoveredId
-            const isSelected = paper.id === panelPaper?.id
-            const faded = dimmed && !isHovered && !isSelected
-            const showLabel = labeledIds.has(paper.id)
+          {/* Candidate nodes */}
+          {nodes.map((nd) => {
+            const isHov  = nd.paper.id === hoveredId
+            const isSel  = nd.paper.id === panelPaper?.id
+            const isDrag = nd.paper.id === dragging?.id
+            const fade   = dimmed && !isHov && !isSel && !isDrag
+            const showLabel = labelIds.has(nd.paper.id) && !dragging
 
             // Label position: outward from center
-            const dx = Math.cos(labelAngle), dy = Math.sin(labelAngle)
-            const labelDist = r + 10
-            const lx = x + dx * labelDist
-            const ly = y + dy * labelDist
-            const anchor = dx > 0.2 ? 'start' : dx < -0.2 ? 'end' : 'middle'
+            const dx = nd.x - CX, dy = nd.y - CY
+            const len = Math.sqrt(dx * dx + dy * dy) || 1
+            const lx  = nd.x + (dx / len) * (nd.r + 9)
+            const ly  = nd.y + (dy / len) * (nd.r + 9)
+            const anchor = dx > 0.15 ? 'start' : dx < -0.15 ? 'end' : 'middle'
 
             return (
               <g
-                key={paper.id}
-                style={{ cursor: 'pointer', opacity: faded ? 0.2 : 1, transition: 'opacity 0.15s' }}
-                onClick={() => handleNodeClick(paper)}
-                onMouseEnter={(e) => handleMouseEnter(e, paper)}
-                onMouseMove={handleMouseMove}
-                onMouseLeave={handleMouseLeave}
+                key={nd.paper.id}
+                style={{
+                  cursor: isDrag ? 'grabbing' : 'grab',
+                  opacity: fade ? 0.15 : 1,
+                  transition: fade ? 'opacity 0.2s' : 'opacity 0.1s',
+                }}
+                onMouseDown={(e) => onNodeMouseDown(e, nd)}
+                onMouseEnter={(e) => onNodeMouseEnter(e, nd.paper)}
+                onMouseMove={onNodeMouseMove}
+                onMouseLeave={onNodeMouseLeave}
+                onClick={() => onNodeClick(nd.paper)}
                 role="button"
-                aria-label={paper.title}
+                aria-label={nd.paper.title}
               >
                 {/* Aura */}
-                <circle cx={x} cy={y} r={r + 6} fill={color}
-                  opacity={isSelected ? 0.28 : isHovered ? 0.18 : 0.08}
-                  style={{ transition: 'opacity 0.15s' }}
-                />
+                <circle cx={nd.x} cy={nd.y} r={nd.r + 7} fill={nd.color}
+                  opacity={isSel ? 0.3 : isHov ? 0.2 : 0.07}
+                  style={{ transition: 'opacity 0.15s' }} />
+
                 {/* Body */}
                 <circle
-                  cx={x} cy={y} r={r}
-                  fill={isSelected || isHovered ? color : 'var(--bg-1)'}
-                  stroke={color}
-                  strokeWidth={isSelected ? 2.5 : 1.5}
+                  cx={nd.x} cy={nd.y} r={nd.r}
+                  fill={isHov || isSel ? nd.color : 'var(--bg-1)'}
+                  stroke={nd.color}
+                  strokeWidth={isSel ? 2.5 : 1.5}
+                  filter={isHov || isSel ? 'url(#ng-glow)' : undefined}
                   style={{ transition: 'fill 0.15s, stroke-width 0.15s' }}
                 />
+
                 {/* Selection dashed ring */}
-                {isSelected && (
-                  <circle cx={x} cy={y} r={r + 8}
-                    fill="none" stroke={color}
+                {isSel && (
+                  <circle cx={nd.x} cy={nd.y} r={nd.r + 9}
+                    fill="none" stroke={nd.color}
                     strokeWidth="1.5" strokeDasharray="3 3"
                   />
                 )}
-                {/* Label for top inner-ring nodes */}
+
+                {/* Label for top papers */}
                 {showLabel && (
-                  <text
-                    x={lx} y={ly}
-                    textAnchor={anchor}
-                    fontSize="9"
-                    fontFamily="Inter, system-ui, sans-serif"
+                  <text x={lx} y={ly} textAnchor={anchor} dominantBaseline="middle"
+                    fontSize="9" fontFamily="Inter, system-ui, sans-serif"
                     fill="var(--ink-3)"
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}
-                  >
-                    {truncate(paper.title, 28)}
+                    style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                    {truncate(nd.paper.title, 26)}
                   </text>
                 )}
               </g>
             )
           })}
 
-          {/* Seed node */}
+          {/* Seed node — always on top */}
           <g style={{ pointerEvents: 'none' }}>
-            <circle cx={CX} cy={CY} r={SEED_R + 5} fill="var(--accent)" opacity={0.18} />
-            <circle cx={CX} cy={CY} r={SEED_R} fill="var(--accent)" />
-            <text x={CX} y={CY - 2} textAnchor="middle" fontSize="8" fontWeight="700"
-              fontFamily="JetBrains Mono, monospace" fill="white"
-              style={{ userSelect: 'none' }}
-            >
+            <circle cx={CX} cy={CY} r={SEED_R + 5} fill="var(--accent)" opacity={0.2} />
+            <circle cx={CX} cy={CY} r={SEED_R} fill="var(--accent)" filter="url(#ng-glow)" />
+            <text x={CX} y={CY - 3} textAnchor="middle" fontSize="8" fontWeight="700"
+              fontFamily="JetBrains Mono, monospace" fill="white" style={{ userSelect: 'none' }}>
               SEED
             </text>
             <text x={CX} y={CY + 8} textAnchor="middle" fontSize="7"
               fontFamily="JetBrains Mono, monospace" fill="white" opacity={0.75}
-              style={{ userSelect: 'none' }}
-            >
+              style={{ userSelect: 'none' }}>
               paper
             </text>
           </g>
         </svg>
 
-        {/* Hover tooltip */}
-        {tooltip && <Tooltip tip={tooltip} containerW={containerW} />}
+        {tooltip && !dragging && <Tooltip tip={tooltip} cw={cw} />}
 
-        {/* Selected paper panel */}
         {panelPaper && (
           <SelectedPanel
             paper={panelPaper}
-            onClose={() => {
-              setPanelPaper(null)
-              dispatch({ type: 'SELECT_PAPER', payload: null })
-            }}
-            onGoToRanked={() => goToRanked(panelPaper)}
+            onClose={() => { setPanelPaper(null); dispatch({ type: 'SELECT_PAPER', payload: null }) }}
+            onGo={() => { dispatch({ type: 'SELECT_PAPER', payload: panelPaper.id }); dispatch({ type: 'SET_RESULTS_TAB', payload: 'ranked' }) }}
           />
         )}
       </div>
 
       <p className="text-xs text-center" style={{ color: 'var(--ink-4)' }}>
-        Closer rings = higher score. Node size = citation count. Hover to preview, click to inspect.
+        Nodes fly to position on load. Drag to rearrange. Hover to preview · Click to inspect.
+        Distance from seed ≈ relevance score.
       </p>
     </div>
   )
