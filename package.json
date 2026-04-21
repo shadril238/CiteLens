@@ -7,6 +7,7 @@
     "dev": "vite",
     "test": "tsc -p tsconfig.test.json && node --test tests/exportResults.test.mjs",
     "build": "tsc && vite build",
+    "test": "tsc -p tsconfig.test.json && node --test tests/exportResults.test.mjs && node ./.tmp-tests/utils/selfCitation.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

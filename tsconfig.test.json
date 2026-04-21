@@ -6,5 +6,10 @@
     "rootDir": "./src",
     "outDir": "./.tmp-tests"
   },
-  "include": ["src/utils/exportResults.ts"]
+  "include": [
+    "src/utils/exportResults.ts",
+    "src/types/index.ts",
+    "src/utils/selfCitation.ts",
+    "src/utils/selfCitation.test.ts"
+  ]
 }
