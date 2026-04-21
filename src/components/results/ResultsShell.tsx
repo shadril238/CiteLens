@@ -8,9 +8,17 @@ import { PaperStream } from '../papers/PaperStream'
 import { Timeline } from '../timeline/Timeline'
 import { NetworkGraph } from '../network/NetworkGraph'
 import { SkeletonResults, SkeletonSeedCard } from '../ui/Skeleton'
+import { GhostButton } from '../ui'
 import { useApp } from '../../context/AppContext'
 import { usePapers } from '../../hooks/usePapers'
-import type { ResultsTab } from '../../types'
+import {
+  downloadTextFile,
+  getExportDateStamp,
+  serializeCsv,
+  toBibtex,
+  toCsvRows,
+} from '../../utils/exportResults'
+import type { Paper, ResultsTab } from '../../types'
 
 const TABS: { value: ResultsTab; label: (n: number) => string }[] = [
   { value: 'ranked',   label: (n) => `Ranked results (${n})` },
@@ -38,7 +46,6 @@ function EmptyState() {
     </div>
   )
 }
-
 
 function RankedContent() {
   const { state } = useApp()
@@ -108,6 +115,27 @@ export function ResultsShell() {
   const { mode, resultsTab } = state
   const papers = usePapers()
   const isLoading = mode === 'loading'
+  const hasVisibleRankedResults = papers.length > 0
+
+  function handleExportCsv() {
+    if (!hasVisibleRankedResults) return
+
+    downloadTextFile(
+      `citelens-results-${getExportDateStamp()}.csv`,
+      'text/csv;charset=utf-8',
+      serializeCsv(toCsvRows(papers)),
+    )
+  }
+
+  function handleExportBibtex() {
+    if (!hasVisibleRankedResults) return
+
+    downloadTextFile(
+      `citelens-results-${getExportDateStamp()}.bib`,
+      'application/x-bibtex;charset=utf-8',
+      toBibtex(papers),
+    )
+  }
 
   if (isLoading) {
     return (
@@ -124,25 +152,38 @@ export function ResultsShell() {
       <SeedCard />
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-[var(--line)]">
-        {TABS.map((tab) => (
-          <button
-            key={tab.value}
-            onClick={() => dispatch({ type: 'SET_RESULTS_TAB', payload: tab.value })}
-            className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors ${
-              resultsTab === tab.value
-                ? 'text-[var(--accent-ink)] bg-[var(--accent-weak)]'
-                : 'text-[var(--ink-3)] hover:text-[var(--ink-2)] hover:bg-[var(--bg-2)]'
-            }`}
-            style={
-              resultsTab === tab.value
-                ? { boxShadow: '0 2px 0 0 var(--accent)' }
-                : undefined
-            }
-          >
-            {tab.label(papers.length)}
-          </button>
-        ))}
+      <div className="flex items-end justify-between gap-3 flex-wrap border-b border-[var(--line)]">
+        <div className="flex items-center gap-1 flex-wrap">
+          {TABS.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => dispatch({ type: 'SET_RESULTS_TAB', payload: tab.value })}
+              className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors ${
+                resultsTab === tab.value
+                  ? 'text-[var(--accent-ink)] bg-[var(--accent-weak)]'
+                  : 'text-[var(--ink-3)] hover:text-[var(--ink-2)] hover:bg-[var(--bg-2)]'
+              }`}
+              style={
+                resultsTab === tab.value
+                  ? { boxShadow: '0 2px 0 0 var(--accent)' }
+                  : undefined
+              }
+            >
+              {tab.label(papers.length)}
+            </button>
+          ))}
+        </div>
+
+        {resultsTab === 'ranked' && (
+          <div className="flex items-center gap-2 pb-2 flex-wrap">
+            <GhostButton size="sm" disabled={!hasVisibleRankedResults} onClick={handleExportCsv}>
+              Export CSV
+            </GhostButton>
+            <GhostButton size="sm" disabled={!hasVisibleRankedResults} onClick={handleExportBibtex}>
+              Export BibTeX
+            </GhostButton>
+          </div>
+        )}
       </div>
 
       {/* Tab content */}
